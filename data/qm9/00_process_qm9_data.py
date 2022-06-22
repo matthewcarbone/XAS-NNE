@@ -1,19 +1,21 @@
 from datetime import datetime
 from pathlib import Path
 import pickle
+import sys
 import time
 
 from pymatgen.core.structure import Molecule
 from tqdm import tqdm
 
-from xas_nne.utils import read_json, save_json, timeit
-from xas_nne.qm9 import read_qm9_xyz
-from xas_nne.feff import FeffWriter, load_completed_FEFF_results
+# This script is designed to be run from exactly where it is
+sys.path.append(str(Path.cwd().parent.parent))
 
+from xas_nne.utils import read_json, save_json, timeit  # noqa
+from xas_nne.qm9 import read_qm9_xyz  # noqa
+from xas_nne.feff import FeffWriter, load_completed_FEFF_results  # noqa
 
 DSGDB9NSD_PATH = None
-DATA_ROOT = Path("data") / Path("qm9")
-QM9_TARGET_JSON = DATA_ROOT / Path("raw_qm9.json")
+QM9_TARGET_JSON = Path("raw_qm9.json")
 
 
 STEP_QM9_TO_JSON = True
@@ -73,15 +75,15 @@ if __name__ == '__main__':
     if STEP_PICKLE:
         today = datetime.now().strftime("%y%m%d")
         absorbers_string = "-".join(ABSORBERS)
-        save_string = DATA_ROOT / Path(f"XANES-{today}-{absorbers_string}.pkl")
+        save_string = Path(f"XANES-{today}-{absorbers_string}.pkl")
         if save_string.exists():
             raise ValueError(f"Pickle file {save_string} already exists")
 
         print(f"To-pickle running, saving to {save_string}")
         for absorber in ABSORBERS:
-            feff_inp_files = (DATA_ROOT / Path(
+            feff_inp_files = Path(
                 f"{absorber}-{SPECTRUM_TYPE}"
-            )).rglob("feff.inp")
+            ).rglob("feff.inp")
             failures = []
             total = 0
             t0 = time.time()

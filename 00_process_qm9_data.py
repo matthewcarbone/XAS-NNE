@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
                 if ii % 10000 == 0:
                     dt = (time.time() - t0) / 60.0
-                    print(f"{ii:08} done {dt:.1f} m")
+                    print(f"{ii:08} done {dt:.1f} m", flush=True)
 
             # Sometimes FEFF fails to converge. We will ignore these cases
             # later.

@@ -36,7 +36,10 @@ def random_downsample(arrays, keep_prop=0.9, replace=False, seed=None):
         raise ValueError(f"keep_prop {keep_prop} must be in 0, 1")
     L = arrays[0].shape[0]  # Number of examples
     choice = np.random.choice(
-        L, size=int(keep_prop * L), replace=replace, p=None
+        L,
+        size=int(keep_prop * L),
+        replace=replace,
+        p=None
     )
     return [arr[choice, ...] for arr in arrays]
 

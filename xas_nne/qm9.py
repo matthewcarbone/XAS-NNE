@@ -1,7 +1,10 @@
 """General utilities for parsing the QM9 database."""
 
+from collections import Counter
 
 import numpy as np
+from rdkit import Chem
+from tqdm import tqdm
 
 
 def parse_QM9_scalar_properties(props, selected_properties=None):
@@ -117,3 +120,116 @@ def read_qm9_xyz(xyz_path):
         "elements": elements,
         "zwitter": zwitter,
     }
+
+
+def split_qm9_data_by_number_of_absorbers(
+    data,
+    absorber,
+    max_training_absorbers=2,
+    keep_zwitter=False
+):
+    """A helper function for preparing qm9 data that resolves the training and
+    testing sets by the number of absorbing atoms. Specifically, the specified
+    max number of absorbers is for the training set, and the rest of the
+    data goes into the testing set.
+
+    .. note::
+
+        It is assumed that the keys in the passed data are
+        ``['grid', 'y', 'x', 'names', 'origin_smiles']``.
+
+    Parameters
+    ----------
+    data : dict
+        A dictionary with keys "``x``" and "``y``", at least, for the features
+        and targets, respectively. More keys are required for additional
+        functionality.
+    absorber : str
+        The absorbing atom type.
+    max_training_absorbers : int, optional
+        The maximum number of absorbing atoms per molecule in the training set.
+    keep_zwitter : bool, optional
+        If False, will remove zwitter-ionic species.
+
+    Returns
+    -------
+    dict
+        A dictionary of of dictionaries, with keys as "train" and "test".
+    """
+
+    print(f"Parsing the qm9 data by number of absorbers={absorber}")
+    print(f"Training data will have <={max_training_absorbers} absorbers")
+    print("Test data will get the rest")
+    print(f"Keeping zwitterions: {keep_zwitter}")
+
+    # Will throw a key error if ``origin_smiles`` is not in the data
+    unique_smiles = list(set(data["origin_smiles"]))
+
+    # Convert to mol
+    smiles_to_mol_map = {
+        smile: Chem.MolFromSmiles(smile) for smile in unique_smiles
+    }
+
+    # Get the number of absorbers
+    print("Computing smiles_to_n_absorbers_map")
+    smiles_to_n_absorbers_map = dict()
+
+    for smile in tqdm(smiles_to_mol_map.keys()):
+        mol = smiles_to_mol_map[smile]
+        counter = Counter([atom.GetSymbol() for atom in mol.GetAtoms()])
+        smiles_to_n_absorbers_map[smile] = counter[absorber]
+
+    n_absorbers_in_datapoint = np.array([
+        smiles_to_n_absorbers_map[smi] for smi in data["origin_smiles"]
+    ])
+    where_zwitter = ~np.array([
+        "+" in smi or "-" in smi for smi in data["origin_smiles"]
+    ])
+    if keep_zwitter:
+        where_zwitter = np.ones_like(where_zwitter)
+
+    where_train = np.where(
+        (n_absorbers_in_datapoint <= max_training_absorbers) & where_zwitter
+    )[0]
+    where_test = np.where(
+        (n_absorbers_in_datapoint > max_training_absorbers) & where_zwitter
+    )[0]
+    assert set(list(where_train)).isdisjoint(set(list(where_test)))
+
+    # Now we split these up
+    train = {
+        "grid": data["grid"],
+        "x": data["x"][where_train, :],
+        "y": data["y"][where_train, :],
+        "names": [data["names"][ii] for ii in where_train],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
+        "n_absorbers_in_molecule": [
+            n_absorbers_in_datapoint[ii] for ii in where_train
+        ],
+    }
+    test = {
+        "grid": data["grid"],
+        "x": data["x"][where_test, :],
+        "y": data["y"][where_test, :],
+        "names": [data["names"][ii] for ii in where_test],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
+        "n_absorbers_in_molecule": [
+            n_absorbers_in_datapoint[ii] for ii in where_test
+        ],
+    }
+
+    # Triple check
+    assert set(train["names"]).isdisjoint(set(test["names"]))
+
+    # Molecules i.e. SMILES should also be disjoint
+    assert set(train["origin_smiles"]).isdisjoint(set(test["origin_smiles"]))
+
+    # Final assertion
+    assert all([
+        xx <= max_training_absorbers for xx in train["n_absorbers_in_molecule"]
+    ])
+    assert all([
+        xx > max_training_absorbers for xx in test["n_absorbers_in_molecule"]
+    ])
+
+    return {"train": train, "test": test}

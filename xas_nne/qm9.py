@@ -232,4 +232,8 @@ def split_qm9_data_by_number_of_absorbers(
         xx > max_training_absorbers for xx in test["n_absorbers_in_molecule"]
     ])
 
+    L1 = len(train["origin_smiles"])
+    L2 = len(test["origin_smiles"])
+    print(f"Done with {L1} train and {L2} test")
+
     return {"train": train, "test": test}

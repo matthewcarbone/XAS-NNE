@@ -4,6 +4,7 @@ from collections import Counter
 
 import numpy as np
 from rdkit import Chem
+import torch
 from tqdm import tqdm
 
 
@@ -120,6 +121,64 @@ def read_qm9_xyz(xyz_path):
         "elements": elements,
         "zwitter": zwitter,
     }
+
+
+def random_split(
+    data,
+    prop_test=0.1,
+    keep_zwitter=False,
+    seed=None,
+):
+
+    L = len(data["x"])
+    print(f"Original data has {L} data points")
+    if not keep_zwitter:
+        where_not_zwitter = np.where(np.array([
+            "+" not in smi and "-" not in smi for smi in data["origin_smiles"]
+        ]) == 1)[0]
+        print(where_not_zwitter)
+        data["x"] = data["x"][where_not_zwitter, :]
+        data["y"] = data["y"][where_not_zwitter, :]
+        data["names"] = [data["names"][ii] for ii in where_not_zwitter]
+        data["origin_smiles"] = [
+            data["origin_smiles"][ii] for ii in where_not_zwitter
+        ]
+        L = len(data["x"])
+        print(f"Down-sampled to {L} data after removing zwitter ions")
+
+    L = len(data["x"])
+    n_test = int(L * prop_test)
+    n_train = L - n_test
+    _train, _test = torch.utils.data.random_split(
+        range(L),
+        [n_train, n_test],
+        generator=torch.Generator().manual_seed(seed) if seed is not None
+        else None
+    )
+    where_train = _train.indices
+    where_test = _test.indices
+
+    # Now we split these up
+    train = {
+        "grid": data["grid"],
+        "x": data["x"][where_train, :],
+        "y": data["y"][where_train, :],
+        "names": [data["names"][ii] for ii in where_train],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
+    }
+    test = {
+        "grid": data["grid"],
+        "x": data["x"][where_test, :],
+        "y": data["y"][where_test, :],
+        "names": [data["names"][ii] for ii in where_test],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
+    }
+
+    L1 = len(train["origin_smiles"])
+    L2 = len(test["origin_smiles"])
+    print(f"Done with {L1} train and {L2} test")
+
+    return {"train": train, "test": test}
 
 
 def split_qm9_data_by_number_of_absorbers(

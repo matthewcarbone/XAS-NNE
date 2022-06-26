@@ -23,7 +23,7 @@ from pytorch_lightning.loggers.csv_logs import CSVLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from exafs_tools.data import Data
+from xas_nne.data import Data
 
 
 def _activation_map(s):

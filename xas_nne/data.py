@@ -74,7 +74,6 @@ class Data(pl.LightningDataModule):
             "num_workers": 3,
         },
         downsample_training_proportion=1.0,
-        seed=None,
     ):
         super().__init__()
         if set(list(train.keys())) != set(list(val.keys())):
@@ -104,7 +103,6 @@ class Data(pl.LightningDataModule):
                 _train,
                 keep_prop=downsample_training_proportion,
                 replace=False,
-                seed=seed,
             )
 
         self._train_data = (Tensor(xx) for xx in _train)

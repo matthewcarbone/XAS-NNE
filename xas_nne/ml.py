@@ -16,13 +16,14 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
+from torch.utils.data import random_split
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.seed import seed_everything
 from pytorch_lightning.loggers.csv_logs import CSVLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from exafs_tools.data import UnsupervisedData
+from exafs_tools.data import Data
 
 
 def _activation_map(s):
@@ -199,6 +200,46 @@ class _GeneralPLModule:
 class LightningMultiLayerPerceptron(
     _OptimizerSetter, _GeneralPLModule, pl.LightningModule
 ):
+
+    @classmethod
+    def from_random_architecture(
+        cls,
+        input_size,
+        min_layers=3,
+        max_layers=7,
+        min_neurons_per_layer=80,
+        max_neurons_per_layer=120,
+        dropout=0.0,
+        batch_norm=False,
+        activation="relu",
+        last_activation=None,
+        criterion="mse",
+        last_batch_norm=False,
+        seed=None,
+    ):
+
+        np.random.seed(seed)
+        n_hidden_layers = np.random.randint(
+            low=min_layers,
+            high=max_layers + 1
+        )
+        architecture = np.random.randint(
+            low=min_neurons_per_layer,
+            high=max_neurons_per_layer,
+            size=(n_hidden_layers,)
+        )
+        return LightningMultiLayerPerceptron(
+            input_size=input_size,
+            hidden_sizes=architecture[:-1],
+            output_size=architecture[-1],
+            dropout=dropout,
+            batch_norm=batch_norm,
+            activation=activation,
+            last_activation=last_activation,
+            criterion=criterion,
+            last_batch_norm=last_batch_norm,
+        )
+
     def __init__(
         self,
         *,
@@ -348,197 +389,318 @@ def load_LightningMultiLayerPerceptron_from_ckpt(path):
     return LightningMultiLayerPerceptron.load_from_checkpoint(path)
 
 
-# class SingleLightningAutoencoderEstimator(MSONable):
+class SingleEstimator(MSONable):
 
-#     def get_default_logger(self):
-#         return CSVLogger(self._root, name="Logs")
+    def get_default_logger(self):
+        return CSVLogger(self._root, name="Logs")
 
-#     def get_default_early_stopper(self):
-#         return EarlyStopping(
-#             monitor="train_loss",
-#             check_finite=True,
-#             patience=100,
-#             verbose=False,
-#         )
+    def get_default_early_stopper(self, **kwargs):
+        """Gets the default early stopper. Some of the defaults should be
+        something like
 
-#     def get_trainer(self, max_epochs=100):
-#         logger = self.get_default_logger()
-#         early_stopper = self.get_default_early_stopper()
-#         cuda = torch.cuda.is_available()
-#         checkpointer = ModelCheckpoint(
-#             dirpath=f"{self._root}/Checkpoints",
-#             save_top_k=5,
-#             monitor="train_loss"
-#         )
-#         print(f"Setting trainer with cuda={cuda}")
-#         return Trainer(
-#             gpus=int(cuda),
-#             num_nodes=1,
-#             auto_select_gpus=bool(cuda),
-#             precision=32,
-#             max_epochs=max_epochs,
-#             enable_progress_bar=False,
-#             log_every_n_steps=1,
-#             logger=logger,
-#             callbacks=[early_stopper, checkpointer],
-#             enable_model_summary=False,
-#         )
+        monitor="val_loss"
+        check_finite=True
+        patience=100
+        verbose=False
+        """
 
-#     @staticmethod
-#     def set_optimizer_family(
-#         model,
-#         lr=1e-2,
-#         patience=10,
-#         min_lr=1e-7,
-#         factor=0.95
-#     ):
-#         local = {
-#             key: value for key, value in locals().items() if key != "model"
-#         }
-#         print(f"Setting optimizer family: {local}")
-#         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-#         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-#             optimizer,
-#             patience=patience,
-#             min_lr=min_lr,
-#             factor=factor,
-#         )
-#         scheduler_kwargs = {"monitor": "train_loss"}
-#         model.set_optimizer(optimizer, scheduler, scheduler_kwargs)
+        return EarlyStopping(monitor="train_loss", **kwargs)
 
-#     def _set_root(self, root):
-#         if root is not None:
-#             self._root = str(root)
-#             Path(self._root).mkdir(exist_ok=True, parents=True)
-#         else:
-#             self._root = None
+    def get_trainer(
+        self,
+        max_epochs=100,
+        monitor="val_loss",
+        early_stopper_patience=100,
+        gpus=None
+    ):
+        """Initializes and returns the trainer object.
 
-#     @property
-#     def best_checkpoint(self):
-#         return self._best_checkpoint
+        Parameters
+        ----------
+        max_epochs : int, optional
+        monitor : str, optional
+        early_stopper_patience : int, optional
 
-#     @property
-#     def best_model(self):
-#         return load_LightningMultiLayerPerceptron_from_ckpt(
-#             self._best_checkpoint
-#         )
+        Returns
+        -------
+        Trainer
+        """
 
-#     def __init__(
-#         self,
-#         root=None,
-#         from_random_architecture_kwargs={
-#             "min_layers": 2,
-#             "max_layers": 4,
-#             "min_neurons_per_layer": 80,
-#             "max_neurons_per_layer": 120,
-#             "dropout": 0.0,
-#             "batch_norm": False,
-#             "activation": "relu",
-#             "before_latent_activation": None,
-#             "criterion": "mse",
-#             "last_activation": None,
-#         },
-#         best_checkpoint=None,
-#         last_lr=None
-#     ):
-#         self._set_root(root)
-#         self._best_checkpoint = best_checkpoint
-#         self._last_lr = last_lr
-#         self._from_random_architecture_kwargs = from_random_architecture_kwargs
+        logger = self.get_default_logger()
+        early_stopper = self.get_default_early_stopper(
+            monitor=monitor,
+            check_finite=True,
+            patience=early_stopper_patience,
+            verbose=False
+        )
+        cuda = torch.cuda.is_available()
+        checkpointer = ModelCheckpoint(
+            dirpath=f"{self._root}/Checkpoints",
+            save_top_k=5,
+            monitor=monitor
+        )
+        print(f"Setting trainer with cuda={cuda}")
 
-#     def train(
-#         self,
-#         training_data,
-#         model=None,
-#         checkpoint=None,
-#         epochs=100,
-#         override_root=None,
-#         lr=None,
-#         parallel=False
-#     ):
-#         """Trains a model. If model is None, will attempt to load one from
-#         state.
+        if gpus is None:
+            gpus = int(cuda)
+            auto_select_gpus = bool(cuda)
+        else:
+            assert isinstance(gpus, int)
+            auto_select_gpus = True
+        return Trainer(
+            gpus=gpus,
+            num_nodes=1,
+            auto_select_gpus=auto_select_gpus,
+            precision=32,
+            max_epochs=max_epochs,
+            enable_progress_bar=False,
+            log_every_n_steps=1,
+            logger=logger,
+            callbacks=[early_stopper, checkpointer],
+            enable_model_summary=True,
+        )
 
-#         Parameters
-#         ----------
-#         training_data : numpy.array
-#             Description
-#         model : None, optional
-#             Description
-#         checkpoint : None, optional
-#             Description
-#         epochs : int, optional
-#             Description
-#         override_root : None, optional
-#             Description
-#         lr : float, optional
-#             Description
-#         """
+    @staticmethod
+    def set_optimizer_family(
+        model,
+        lr=1e-2,
+        patience=10,
+        min_lr=1e-7,
+        factor=0.95,
+        monitor="val_loss",
+    ):
+        local = {
+            key: value for key, value in locals().items() if key != "model"
+        }
+        print(f"Setting optimizer family: {local}")
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            patience=patience,
+            min_lr=min_lr,
+            factor=factor,
+        )
+        scheduler_kwargs = {"monitor": monitor}
+        model.set_optimizer(optimizer, scheduler, scheduler_kwargs)
 
-#         if model is None:
-#             if checkpoint is not None:
-#                 model = LightningAutoencoder.load_from_checkpoint(checkpoint)
-#                 print(f"Reloaded model from provided {checkpoint}")
-#             elif self._best_checkpoint is not None:
-#                 model = self.best_model
-#                 print(
-#                     "Initialized model from best stored model at "
-#                     f"{self._best_checkpoint}"
-#                 )
-#             else:
-#                 model = LightningAutoencoder.from_random_architecture(
-#                     training_data.shape[1],
-#                     **self._from_random_architecture_kwargs
-#                 )
-#                 print("Initialized model from random architecture")
+    def _set_root(self, root):
+        if root is not None:
+            self._root = str(root)
+            Path(self._root).mkdir(exist_ok=True, parents=True)
+        else:
+            self._root = None
 
-#         if lr is None:
-#             if self._last_lr is not None:
-#                 lr = self._last_lr
-#                 print(f"Learning rate loaded from stored: {lr}")
-#             else:
-#                 lr = 1e-2  # Good default
+    @property
+    def best_checkpoint(self):
+        return self._best_checkpoint
 
-#         # After loading the data from root, we can override it to save to a
-#         # new location
-#         if override_root is not None:
-#             print(f"Root set to {override_root}")
-#             self._set_root(override_root)
+    @property
+    def best_model(self):
+        return load_LightningMultiLayerPerceptron_from_ckpt(
+            self._best_checkpoint
+        )
 
-#         # Execute the training using a lot of defaults/boilerplate
-#         self.set_optimizer_family(model, lr=lr)
-#         trainer = self.get_trainer(max_epochs=epochs)
-#         loader = UnsupervisedData(
-#             train={"x": training_data.copy()},
-#             parallel=parallel
-#         )
-#         trainer.fit(
-#             model=model,
-#             train_dataloaders=loader,
-#             print_every_epoch=epochs // 5
-#         )
-#         self._best_checkpoint = trainer.checkpoint_callback.best_model_path
-#         self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]
+    def __init__(
+        self,
+        root=None,
+        from_random_architecture_kwargs={
+            "min_layers": 3,
+            "max_layers": 7,
+            "min_neurons_per_layer": 150,
+            "max_neurons_per_layer": 200,
+            "dropout": 0.0,
+            "batch_norm": False,
+            "activation": "relu",
+            "criterion": "mse",
+            "last_activation": None,
+            "last_batch_norm": False,
+        },
+        best_checkpoint=None,
+        last_lr=None
+    ):
+        self._set_root(root)
+        self._best_checkpoint = best_checkpoint
+        self._last_lr = last_lr
+        self._from_random_architecture_kwargs = from_random_architecture_kwargs
 
-#     def predict(self, x, model=None):
-#         """Makes a prediction on the provided data.
+    def train(
+        self,
+        *,
+        training_data,
+        model=None,
+        override_root=None,
+        checkpoint=None,
+        val_prop=0.1,
+        batch_size=4096,
+        persistent_workers=True,
+        pin_memory=True,
+        num_workers=3,
+        epochs=100,
+        lr=None,
+        patience=10,
+        min_lr=1e-7,
+        factor=0.95,
+        monitor="val_loss",
+        early_stopper_patience=100,
+        gpus=None,
+        seed=None,
+    ):
+        """Trains a model. If model is None, will attempt to load one from
+        state.
 
-#         Parameters
-#         ----------
-#         x : numpy.array
+        Parameters
+        ----------
+        training_data : numpy.array
+            Description
+        model : None, optional
+            Description
+        checkpoint : None, optional
+            Description
+        val_prop : float, optional
+            Description
+        batch_size : int, optional
+            Description
+        persistent_workers : bool, optional
+            Description
+        pin_memory : bool, optional
+            Description
+        num_workers : int, optional
+            Description
+        epochs : int, optional
+            Description
+        override_root : None, optional
+            Description
+        lr : float, optional
+            Description
+        patience : int, optional
+            Description
+        min_lr : float, optional
+            Description
+        factor : float, optional
+            Description
+        monitor : str, optional
+            Description
+        early_stopper_patience : int, optional
+            Description
+        gpus : None, optional
+            Description
+        seed : None, optional
+            Description
+        """
 
-#         Returns
-#         -------
-#         numpy.array
-#         """
+        if seed is not None:
+            seed_everything(seed)
 
-#         if model is None:
-#             model = self.best_model
+        if model is None:
+            if checkpoint is not None:
+                model = LightningMultiLayerPerceptron.load_from_checkpoint(
+                    checkpoint
+                )
+                print(f"Reloaded model from provided {checkpoint}")
+            elif self._best_checkpoint is not None:
+                model = self.best_model
+                print(
+                    "Initialized model from best stored model at "
+                    f"{self._best_checkpoint}"
+                )
+            else:
+                model = LightningMultiLayerPerceptron.from_random_architecture(
+                    training_data.shape[1],
+                    **self._from_random_architecture_kwargs
+                )
+                print(
+                    "Initialized model from random architecture using "
+                    f"arguments {self._from_random_architecture_kwargs}"
+                )
 
-#         x = torch.Tensor(x)
-#         with torch.no_grad():
-#             model.eval()
-#             return model.forward(x).detach().numpy()
+        if lr is None:
+            if self._last_lr is not None:
+                lr = self._last_lr
+                print(f"Learning rate loaded from stored: {lr}")
+            else:
+                lr = 1e-2  # Good default
+
+        # After loading the data from root, we can override it to save to a
+        # new location
+        if override_root is not None:
+            print(f"Root set to {override_root}")
+            self._set_root(override_root)
+
+        # Execute the training using a lot of defaults/boilerplate
+        self.set_optimizer_family(
+            model,
+            lr=lr,
+            patience=patience,
+            min_lr=min_lr,
+            factor=factor,
+            monitor=monitor,
+        )
+
+        # Trainer
+        trainer = self.get_trainer(
+            max_epochs=epochs,
+            early_stopper_patience=early_stopper_patience,
+            gpus=gpus,
+            monitor=monitor,
+        )
+
+        # Loader
+        L = len(training_data["x"])
+        val_number = int(L * val_prop)
+        train_number = L - val_number
+        train_idx, val_idx = random_split(
+            range(L),
+            [train_number, val_number],
+            generator=torch.Generator().manual_seed(seed) if seed is not None
+            else None
+        )
+        _train_data = {
+            "x": training_data["x"][train_idx, :],
+            "y": training_data["y"][train_idx, :]
+        }
+        _val_data = {
+            "x": training_data["x"][val_idx, :],
+            "y": training_data["y"][val_idx, :]
+        }
+        loader = Data(
+            train=_train_data,
+            val=_val_data,
+            train_loader_kwargs={
+                "batch_size": batch_size,
+                "persistent_workers": persistent_workers,
+                "pin_memory": pin_memory,
+                "num_workers": num_workers,
+            },
+        )
+
+        # Execute training
+        trainer.fit(
+            model=model,
+            train_dataloaders=loader,
+            print_every_epoch=epochs // 5
+        )
+        self._best_checkpoint = trainer.checkpoint_callback.best_model_path
+        self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]
+
+    def predict(self, x, model=None):
+        """Makes a prediction on the provided data.
+
+        Parameters
+        ----------
+        x : numpy.array
+
+        Returns
+        -------
+        numpy.array
+        """
+
+        if model is None:
+            model = self.best_model
+
+        x = torch.Tensor(x)
+        with torch.no_grad():
+            model.eval()
+            return model.forward(x).detach().numpy()
 
 
 # class CaptureOutput():

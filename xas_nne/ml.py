@@ -29,6 +29,8 @@ from xas_nne.data import Data
 def _activation_map(s):
     if s == "relu":
         return nn.ReLU()
+    elif s == "leaky_relu":
+        return nn.LeakyReLU()
     elif s == "sigmoid":
         return nn.Sigmoid()
     elif s == "softplus":
@@ -229,6 +231,8 @@ class LightningMultiLayerPerceptron(
             high=max_neurons_per_layer,
             size=(n_hidden_layers,)
         )
+        a = [input_size, *architecture, output_size]
+        print(f"Initializing from random architecture: {a}")
         return LightningMultiLayerPerceptron(
             input_size=input_size,
             hidden_sizes=architecture,
@@ -637,7 +641,6 @@ class SingleEstimator(MSONable):
             factor=factor,
             monitor=monitor,
         )
-        print(model)
 
         # Trainer
         trainer = self.get_trainer(
@@ -657,8 +660,6 @@ class SingleEstimator(MSONable):
             generator=torch.Generator().manual_seed(seed) if seed is not None
             else None
         )
-        print(f"X has shape: {training_data['x'].shape}")
-        print(f"Y has shape: {training_data['y'].shape}")
         _train_data = {
             "x": training_data["x"][train_idx, :],
             "y": training_data["y"][train_idx, :]
@@ -708,165 +709,149 @@ class SingleEstimator(MSONable):
             return model.forward(x).detach().numpy()
 
 
-# class CaptureOutput():
-#     def __enter__(self):
-#         self.record = {"stdout": None, "stderr": None}
-#         self._stdout = sys.stdout
-#         self._stderr = sys.stderr
-#         sys.stdout = self._mystdout = StringIO()
-#         sys.stderr = self._mystderr = StringIO()
-#         return self
+class Ensemble(MSONable):
 
-#     def __exit__(self, *args):
-#         self.record["stdout"] = self._mystdout.getvalue().splitlines()
-#         self.record["stderr"] = self._mystderr.getvalue().splitlines()
-#         sys.stdout = self._stdout
-#         sys.stderr = self._stderr
+    @classmethod
+    def from_random_architectures(
+        cls,
+        root,
+        n_estimators=10,
+        from_random_architecture_kwargs={
+            "min_layers": 4,
+            "max_layers": 8,
+            "min_neurons_per_layer": 160,
+            "max_neurons_per_layer": 300,
+            "dropout": 0.0,
+            "batch_norm": False,
+            "activation": "leaky_relu",
+            "last_activation": None,
+            "criterion": "mse",
+            "last_batch_norm": False,
+        },
+        seed=None
+    ):
+        if Path(root).exists():
+            now = datetime.now().strftime("%y%m%d-%H%M%S")
+            old_root = str(root) + f"-{now}"
+            rename(str(root), old_root)
+            print(f"Renamed existing root {root} to {old_root}")
+        if seed is not None:
+            seed_everything(seed)
+        estimators = [
+            SingleEstimator(
+                from_random_architecture_kwargs=from_random_architecture_kwargs
+            )
+            for _ in range(n_estimators)
+        ]
+        return cls(root, estimators)
 
+    def __init__(self, root, estimators):
+        self._root = str(root)
+        self._estimators = estimators
 
-# class IdentityEnsemble(MSONable):
+    def _get_ensemble_model_root(self, ensemble_index, estimator_index):
+        return Path(self._root) / Path(f"{ensemble_index:06}") / \
+            Path(f"{estimator_index:06}")
 
-#     @classmethod
-#     def from_random_architectures(
-#         cls,
-#         root,
-#         n_estimators=10,
-#         from_random_architecture_kwargs={
-#             "min_layers": 2,
-#             "max_layers": 4,
-#             "min_neurons_per_layer": 80,
-#             "max_neurons_per_layer": 120,
-#             "dropout": 0.0,
-#             "batch_norm": False,
-#             "activation": "relu",
-#             "before_latent_activation": None,
-#             "criterion": "mse",
-#             "last_activation": None,
-#         },
-#         seed=None
-#     ):
-#         if Path(root).exists():
-#             now = datetime.now().strftime("%y%m%d-%H%M%S")
-#             old_root = str(root) + f"-{now}"
-#             rename(str(root), old_root)
-#             print(f"Renamed existing root {root} to {old_root}")
-#         if seed is not None:
-#             seed_everything(seed)
-#         estimators = [
-#             SingleLightningAutoencoderEstimator(
-#                 from_random_architecture_kwargs=from_random_architecture_kwargs
-#             )
-#             for _ in range(n_estimators)
-#         ]
-#         return cls(root, estimators)
+    def train(
+        self,
+        training_data,
+        ensemble_index=0,
+        estimator_index=0,
+        epochs=100,
+        **kwargs
+    ):
+        print(f"Training estimator {estimator_index}")
+        estimator = self._estimators[estimator_index]
+        estimator.train(
+            training_data=training_data,
+            epochs=epochs,
+            override_root=self._get_ensemble_model_root(
+                ensemble_index, estimator_index
+            ),
+            **kwargs,
+        )
 
-#     def __init__(self, root, estimators):
-#         self._root = str(root)
-#         self._estimators = estimators
+    def train_ensemble_serial(
+        self,
+        training_data,
+        ensemble_index=0,
+        epochs=100,
+        **kwargs
+    ):
+        """Trains the entire ensemble in serial. Default behavior is to
+        reload existing models from checkpoint and to train them using the
+        provided learning rate, and other parameters.
 
-#     def _get_ensemble_model_root(self, ensemble_index, estimator_index):
-#         return Path(self._root) / Path(f"{ensemble_index:06}") / \
-#             Path(f"{estimator_index:06}")
+        Parameters
+        ----------
+        training_data : TYPE
+            Description
+        ensemble_index : int, optional
+            Description
+        epochs : int, optional
+            Description
+        lr : None, optional
+            Description
+        """
 
-#     def train(
-#         self,
-#         training_data,
-#         ensemble_index=0,
-#         estimator_index=0,
-#         epochs=100,
-#         lr=None
-#     ):
-#         print(f"Training estimator {estimator_index}")
-#         estimator = self._estimators[estimator_index]
-#         estimator.train(
-#             training_data,
-#             epochs=epochs,
-#             override_root=self._get_ensemble_model_root(
-#                 ensemble_index, estimator_index
-#             ),
-#             lr=lr
-#         )
+        for ii in range(len(self._estimators)):
+            self.train(
+                training_data=training_data,
+                ensemble_index=ensemble_index,
+                estimator_index=ii,
+                epochs=epochs,
+                **kwargs,
+            )
 
-#     def train_ensemble_serial(
-#         self,
-#         training_data,
-#         ensemble_index=0,
-#         epochs=100,
-#         lr=None
-#     ):
-#         """Trains the entire ensemble in serial. Default behavior is to
-#         reload existing models from checkpoint and to train them using the
-#         provided learning rate, and other parameters.
+    def predict(self, x):
+        """Predicts on the provided data in ``x`` by loading the best models
+        from disk.
 
-#         Parameters
-#         ----------
-#         training_data : TYPE
-#             Description
-#         ensemble_index : int, optional
-#             Description
-#         epochs : int, optional
-#             Description
-#         lr : None, optional
-#             Description
-#         """
+        Parameters
+        ----------
+        x : numpy.array
+        """
 
-#         for ii in range(len(self._estimators)):
-#             self.train(
-#                 training_data,
-#                 ensemble_index=ensemble_index,
-#                 estimator_index=ii,
-#                 epochs=epochs,
-#                 lr=lr
-#             )
+        results = []
+        for estimator in self._estimators:
+            results.append(estimator.predict(x))
+        return np.array(results)
 
-#     def predict(self, x):
-#         """Predicts on the provided data in ``x`` by loading the best models
-#         from disk.
+    # def train_ensemble_parallel(
+    #     self,
+    #     training_data,
+    #     ensemble_index=0,
+    #     epochs=100,
+    #     lr=None,
+    #     n_jobs=cpu_count() // 2
+    # ):
 
-#         Parameters
-#         ----------
-#         x : numpy.array
-#         """
+    #     warnings.warn(
+    #         "This is highly experimental! Recommended to just train "
+    #         "in serial for now"
+    #     )
 
-#         results = []
-#         for estimator in self._estimators:
-#             results.append(estimator.predict(x))
-#         return np.array(results)
+    #     def _run_wrapper(estimator_index, estimator):
+    #         estimator.train(
+    #             training_data,
+    #             epochs=epochs,
+    #             override_root=self._get_ensemble_model_root(
+    #                 ensemble_index, estimator_index
+    #             ),
+    #             lr=lr,
+    #             parallel=True
+    #         )
+    #         print(
+    #             "Trained ensemble/estimator "
+    #             f"{ensemble_index}/{estimator_index}",
+    #             flush=True
+    #         )
+    #         return deepcopy(estimator)
 
-#     def train_ensemble_parallel(
-#         self,
-#         training_data,
-#         ensemble_index=0,
-#         epochs=100,
-#         lr=None,
-#         n_jobs=cpu_count() // 2
-#     ):
+    #     results = Parallel(n_jobs=n_jobs)(
+    #         delayed(_run_wrapper)(ii, estimator)
+    #         for ii, estimator in enumerate(self._estimators)
+    #     )
 
-#         warnings.warn(
-#             "This is highly experimental! Recommended to just train "
-#             "in serial for now"
-#         )
-
-#         def _run_wrapper(estimator_index, estimator):
-#             estimator.train(
-#                 training_data,
-#                 epochs=epochs,
-#                 override_root=self._get_ensemble_model_root(
-#                     ensemble_index, estimator_index
-#                 ),
-#                 lr=lr,
-#                 parallel=True
-#             )
-#             print(
-#                 "Trained ensemble/estimator "
-#                 f"{ensemble_index}/{estimator_index}",
-#                 flush=True
-#             )
-#             return deepcopy(estimator)
-
-#         results = Parallel(n_jobs=n_jobs)(
-#             delayed(_run_wrapper)(ii, estimator)
-#             for ii, estimator in enumerate(self._estimators)
-#         )
-
-#         self._estimators = results
+    #     self._estimators = results

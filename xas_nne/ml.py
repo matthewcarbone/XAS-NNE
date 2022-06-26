@@ -251,11 +251,11 @@ class LightningMultiLayerPerceptron(
         input_size,
         hidden_sizes,
         output_size,
-        dropout=0.0,
+        dropout=0.01,
         batch_norm=True,
         activation="relu",
         last_activation="softplus",
-        criterion="mse",
+        criterion="mae",
         last_batch_norm=False,
     ):
         super().__init__()
@@ -275,6 +275,8 @@ class LightningMultiLayerPerceptron(
 
         if criterion == "mse":
             self.criterion = nn.MSELoss(reduction="mean")
+        elif criterion == "mae":
+            self.criterion = nn.L1Loss(reduction="mean")
         else:
             raise ValueError(f"Unknown criterion: {criterion}")
 
@@ -514,10 +516,10 @@ class SingleEstimator(MSONable):
             "min_neurons_per_layer": 150,
             "max_neurons_per_layer": 200,
             "dropout": 0.0,
-            "batch_norm": False,
+            "batch_norm": True,
             "activation": "relu",
-            "criterion": "mse",
-            "last_activation": None,
+            "criterion": "mae",
+            "last_activation": "softplus",
             "last_batch_norm": False,
         },
         best_checkpoint=None,
@@ -722,10 +724,10 @@ class Ensemble(MSONable):
             "min_neurons_per_layer": 160,
             "max_neurons_per_layer": 300,
             "dropout": 0.0,
-            "batch_norm": False,
+            "batch_norm": True,
             "activation": "leaky_relu",
-            "last_activation": None,
-            "criterion": "mse",
+            "last_activation": "relu",
+            "criterion": "mae",
             "last_batch_norm": False,
         },
         seed=None

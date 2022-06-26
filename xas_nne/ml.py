@@ -1,14 +1,28 @@
-"""Core machine learning module. Implements various helper classes for running
-a simple feed-forward neural network ensemble, using Pytorch and Pytorch
-Lightning as the back-ends."""
-
+from datetime import datetime
+from copy import deepcopy
+from functools import cache
+from math import floor
+from io import StringIO
+from joblib import Parallel, delayed
+from multiprocessing import cpu_count
+from os import rename
 from pathlib import Path
 import time
+import sys
+import warnings
 
+from monty.json import MSONable
+import numpy as np
 import pandas as pd
 import torch
 from torch import nn
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.seed import seed_everything
+from pytorch_lightning.loggers.csv_logs import CSVLogger
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint
+
+from exafs_tools.data import UnsupervisedData
 
 
 def _activation_map(s):
@@ -16,6 +30,8 @@ def _activation_map(s):
         return nn.ReLU()
     elif s == "sigmoid":
         return nn.Sigmoid()
+    elif s == "softplus":
+        return nn.Softplus()
     elif s is None:
         return None
     else:
@@ -132,6 +148,7 @@ class _GeneralPLModule:
         self._epoch_dt = time.time()
 
     def _log_outputs(self, outputs, what="train", keys=["loss"]):
+
         d = {}
         for key in keys:
             tmp_loss = torch.tensor([x[key] for x in outputs]).mean().item()
@@ -191,7 +208,7 @@ class LightningMultiLayerPerceptron(
         dropout=0.0,
         batch_norm=True,
         activation="relu",
-        before_latent_activation="sigmoid",  # encoder output
+        last_activation="softplus",
         criterion="mse",
         last_batch_norm=False,
     ):
@@ -199,14 +216,14 @@ class LightningMultiLayerPerceptron(
         self.save_hyperparameters()
 
         activation = _activation_map(activation)
-        before_latent_activation = _activation_map(before_latent_activation)
+        last_activation = _activation_map(last_activation)
 
         self._model = FeedForwardNeuralNetwork(
             architecture=[input_size, *hidden_sizes, output_size],
             dropout=dropout,
             batch_norm=batch_norm,
             activation=activation,
-            last_activation=before_latent_activation,
+            last_activation=last_activation,
             last_batch_norm=last_batch_norm,
         )
 
@@ -314,9 +331,375 @@ class Trainer(pl.Trainer):
         self.export_csv_log()
 
 
-class Ensemble:
+@cache
+def load_LightningMultiLayerPerceptron_from_ckpt(path):
+    """Loads the LightningMultiLayerPerceptron from path, but the results are
+    cached so as to speed up the loading process dramatically.
 
-    def __init__(self, path, models=[]):
-        self._path = Path(path)
-        self._models = models
+    Parameters
+    ----------
+    path : os.PathLike
 
+    Returns
+    -------
+    LightningMultiLayerPerceptron
+    """
+
+    return LightningMultiLayerPerceptron.load_from_checkpoint(path)
+
+
+# class SingleLightningAutoencoderEstimator(MSONable):
+
+#     def get_default_logger(self):
+#         return CSVLogger(self._root, name="Logs")
+
+#     def get_default_early_stopper(self):
+#         return EarlyStopping(
+#             monitor="train_loss",
+#             check_finite=True,
+#             patience=100,
+#             verbose=False,
+#         )
+
+#     def get_trainer(self, max_epochs=100):
+#         logger = self.get_default_logger()
+#         early_stopper = self.get_default_early_stopper()
+#         cuda = torch.cuda.is_available()
+#         checkpointer = ModelCheckpoint(
+#             dirpath=f"{self._root}/Checkpoints",
+#             save_top_k=5,
+#             monitor="train_loss"
+#         )
+#         print(f"Setting trainer with cuda={cuda}")
+#         return Trainer(
+#             gpus=int(cuda),
+#             num_nodes=1,
+#             auto_select_gpus=bool(cuda),
+#             precision=32,
+#             max_epochs=max_epochs,
+#             enable_progress_bar=False,
+#             log_every_n_steps=1,
+#             logger=logger,
+#             callbacks=[early_stopper, checkpointer],
+#             enable_model_summary=False,
+#         )
+
+#     @staticmethod
+#     def set_optimizer_family(
+#         model,
+#         lr=1e-2,
+#         patience=10,
+#         min_lr=1e-7,
+#         factor=0.95
+#     ):
+#         local = {
+#             key: value for key, value in locals().items() if key != "model"
+#         }
+#         print(f"Setting optimizer family: {local}")
+#         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+#         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+#             optimizer,
+#             patience=patience,
+#             min_lr=min_lr,
+#             factor=factor,
+#         )
+#         scheduler_kwargs = {"monitor": "train_loss"}
+#         model.set_optimizer(optimizer, scheduler, scheduler_kwargs)
+
+#     def _set_root(self, root):
+#         if root is not None:
+#             self._root = str(root)
+#             Path(self._root).mkdir(exist_ok=True, parents=True)
+#         else:
+#             self._root = None
+
+#     @property
+#     def best_checkpoint(self):
+#         return self._best_checkpoint
+
+#     @property
+#     def best_model(self):
+#         return load_LightningMultiLayerPerceptron_from_ckpt(
+#             self._best_checkpoint
+#         )
+
+#     def __init__(
+#         self,
+#         root=None,
+#         from_random_architecture_kwargs={
+#             "min_layers": 2,
+#             "max_layers": 4,
+#             "min_neurons_per_layer": 80,
+#             "max_neurons_per_layer": 120,
+#             "dropout": 0.0,
+#             "batch_norm": False,
+#             "activation": "relu",
+#             "before_latent_activation": None,
+#             "criterion": "mse",
+#             "last_activation": None,
+#         },
+#         best_checkpoint=None,
+#         last_lr=None
+#     ):
+#         self._set_root(root)
+#         self._best_checkpoint = best_checkpoint
+#         self._last_lr = last_lr
+#         self._from_random_architecture_kwargs = from_random_architecture_kwargs
+
+#     def train(
+#         self,
+#         training_data,
+#         model=None,
+#         checkpoint=None,
+#         epochs=100,
+#         override_root=None,
+#         lr=None,
+#         parallel=False
+#     ):
+#         """Trains a model. If model is None, will attempt to load one from
+#         state.
+
+#         Parameters
+#         ----------
+#         training_data : numpy.array
+#             Description
+#         model : None, optional
+#             Description
+#         checkpoint : None, optional
+#             Description
+#         epochs : int, optional
+#             Description
+#         override_root : None, optional
+#             Description
+#         lr : float, optional
+#             Description
+#         """
+
+#         if model is None:
+#             if checkpoint is not None:
+#                 model = LightningAutoencoder.load_from_checkpoint(checkpoint)
+#                 print(f"Reloaded model from provided {checkpoint}")
+#             elif self._best_checkpoint is not None:
+#                 model = self.best_model
+#                 print(
+#                     "Initialized model from best stored model at "
+#                     f"{self._best_checkpoint}"
+#                 )
+#             else:
+#                 model = LightningAutoencoder.from_random_architecture(
+#                     training_data.shape[1],
+#                     **self._from_random_architecture_kwargs
+#                 )
+#                 print("Initialized model from random architecture")
+
+#         if lr is None:
+#             if self._last_lr is not None:
+#                 lr = self._last_lr
+#                 print(f"Learning rate loaded from stored: {lr}")
+#             else:
+#                 lr = 1e-2  # Good default
+
+#         # After loading the data from root, we can override it to save to a
+#         # new location
+#         if override_root is not None:
+#             print(f"Root set to {override_root}")
+#             self._set_root(override_root)
+
+#         # Execute the training using a lot of defaults/boilerplate
+#         self.set_optimizer_family(model, lr=lr)
+#         trainer = self.get_trainer(max_epochs=epochs)
+#         loader = UnsupervisedData(
+#             train={"x": training_data.copy()},
+#             parallel=parallel
+#         )
+#         trainer.fit(
+#             model=model,
+#             train_dataloaders=loader,
+#             print_every_epoch=epochs // 5
+#         )
+#         self._best_checkpoint = trainer.checkpoint_callback.best_model_path
+#         self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]
+
+#     def predict(self, x, model=None):
+#         """Makes a prediction on the provided data.
+
+#         Parameters
+#         ----------
+#         x : numpy.array
+
+#         Returns
+#         -------
+#         numpy.array
+#         """
+
+#         if model is None:
+#             model = self.best_model
+
+#         x = torch.Tensor(x)
+#         with torch.no_grad():
+#             model.eval()
+#             return model.forward(x).detach().numpy()
+
+
+# class CaptureOutput():
+#     def __enter__(self):
+#         self.record = {"stdout": None, "stderr": None}
+#         self._stdout = sys.stdout
+#         self._stderr = sys.stderr
+#         sys.stdout = self._mystdout = StringIO()
+#         sys.stderr = self._mystderr = StringIO()
+#         return self
+
+#     def __exit__(self, *args):
+#         self.record["stdout"] = self._mystdout.getvalue().splitlines()
+#         self.record["stderr"] = self._mystderr.getvalue().splitlines()
+#         sys.stdout = self._stdout
+#         sys.stderr = self._stderr
+
+
+# class IdentityEnsemble(MSONable):
+
+#     @classmethod
+#     def from_random_architectures(
+#         cls,
+#         root,
+#         n_estimators=10,
+#         from_random_architecture_kwargs={
+#             "min_layers": 2,
+#             "max_layers": 4,
+#             "min_neurons_per_layer": 80,
+#             "max_neurons_per_layer": 120,
+#             "dropout": 0.0,
+#             "batch_norm": False,
+#             "activation": "relu",
+#             "before_latent_activation": None,
+#             "criterion": "mse",
+#             "last_activation": None,
+#         },
+#         seed=None
+#     ):
+#         if Path(root).exists():
+#             now = datetime.now().strftime("%y%m%d-%H%M%S")
+#             old_root = str(root) + f"-{now}"
+#             rename(str(root), old_root)
+#             print(f"Renamed existing root {root} to {old_root}")
+#         if seed is not None:
+#             seed_everything(seed)
+#         estimators = [
+#             SingleLightningAutoencoderEstimator(
+#                 from_random_architecture_kwargs=from_random_architecture_kwargs
+#             )
+#             for _ in range(n_estimators)
+#         ]
+#         return cls(root, estimators)
+
+#     def __init__(self, root, estimators):
+#         self._root = str(root)
+#         self._estimators = estimators
+
+#     def _get_ensemble_model_root(self, ensemble_index, estimator_index):
+#         return Path(self._root) / Path(f"{ensemble_index:06}") / \
+#             Path(f"{estimator_index:06}")
+
+#     def train(
+#         self,
+#         training_data,
+#         ensemble_index=0,
+#         estimator_index=0,
+#         epochs=100,
+#         lr=None
+#     ):
+#         print(f"Training estimator {estimator_index}")
+#         estimator = self._estimators[estimator_index]
+#         estimator.train(
+#             training_data,
+#             epochs=epochs,
+#             override_root=self._get_ensemble_model_root(
+#                 ensemble_index, estimator_index
+#             ),
+#             lr=lr
+#         )
+
+#     def train_ensemble_serial(
+#         self,
+#         training_data,
+#         ensemble_index=0,
+#         epochs=100,
+#         lr=None
+#     ):
+#         """Trains the entire ensemble in serial. Default behavior is to
+#         reload existing models from checkpoint and to train them using the
+#         provided learning rate, and other parameters.
+
+#         Parameters
+#         ----------
+#         training_data : TYPE
+#             Description
+#         ensemble_index : int, optional
+#             Description
+#         epochs : int, optional
+#             Description
+#         lr : None, optional
+#             Description
+#         """
+
+#         for ii in range(len(self._estimators)):
+#             self.train(
+#                 training_data,
+#                 ensemble_index=ensemble_index,
+#                 estimator_index=ii,
+#                 epochs=epochs,
+#                 lr=lr
+#             )
+
+#     def predict(self, x):
+#         """Predicts on the provided data in ``x`` by loading the best models
+#         from disk.
+
+#         Parameters
+#         ----------
+#         x : numpy.array
+#         """
+
+#         results = []
+#         for estimator in self._estimators:
+#             results.append(estimator.predict(x))
+#         return np.array(results)
+
+#     def train_ensemble_parallel(
+#         self,
+#         training_data,
+#         ensemble_index=0,
+#         epochs=100,
+#         lr=None,
+#         n_jobs=cpu_count() // 2
+#     ):
+
+#         warnings.warn(
+#             "This is highly experimental! Recommended to just train "
+#             "in serial for now"
+#         )
+
+#         def _run_wrapper(estimator_index, estimator):
+#             estimator.train(
+#                 training_data,
+#                 epochs=epochs,
+#                 override_root=self._get_ensemble_model_root(
+#                     ensemble_index, estimator_index
+#                 ),
+#                 lr=lr,
+#                 parallel=True
+#             )
+#             print(
+#                 "Trained ensemble/estimator "
+#                 f"{ensemble_index}/{estimator_index}",
+#                 flush=True
+#             )
+#             return deepcopy(estimator)
+
+#         results = Parallel(n_jobs=n_jobs)(
+#             delayed(_run_wrapper)(ii, estimator)
+#             for ii, estimator in enumerate(self._estimators)
+#         )
+
+#         self._estimators = results

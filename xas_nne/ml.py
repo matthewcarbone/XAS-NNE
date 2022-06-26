@@ -205,6 +205,7 @@ class LightningMultiLayerPerceptron(
     def from_random_architecture(
         cls,
         input_size,
+        output_size,
         min_layers=3,
         max_layers=7,
         min_neurons_per_layer=80,
@@ -230,8 +231,8 @@ class LightningMultiLayerPerceptron(
         )
         return LightningMultiLayerPerceptron(
             input_size=input_size,
-            hidden_sizes=architecture[:-1],
-            output_size=architecture[-1],
+            hidden_sizes=architecture,
+            output_size=output_size,
             dropout=dropout,
             batch_norm=batch_norm,
             activation=activation,
@@ -404,7 +405,7 @@ class SingleEstimator(MSONable):
         verbose=False
         """
 
-        return EarlyStopping(monitor="train_loss", **kwargs)
+        return EarlyStopping(**kwargs)
 
     def get_trainer(
         self,
@@ -605,7 +606,8 @@ class SingleEstimator(MSONable):
                 )
             else:
                 model = LightningMultiLayerPerceptron.from_random_architecture(
-                    training_data.shape[1],
+                    input_size=training_data["x"].shape[1],
+                    output_size=training_data["y"].shape[1],
                     **self._from_random_architecture_kwargs
                 )
                 print(
@@ -635,6 +637,7 @@ class SingleEstimator(MSONable):
             factor=factor,
             monitor=monitor,
         )
+        print(model)
 
         # Trainer
         trainer = self.get_trainer(
@@ -654,6 +657,8 @@ class SingleEstimator(MSONable):
             generator=torch.Generator().manual_seed(seed) if seed is not None
             else None
         )
+        print(f"X has shape: {training_data['x'].shape}")
+        print(f"Y has shape: {training_data['y'].shape}")
         _train_data = {
             "x": training_data["x"][train_idx, :],
             "y": training_data["y"][train_idx, :]

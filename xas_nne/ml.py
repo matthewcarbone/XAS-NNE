@@ -551,6 +551,7 @@ class SingleEstimator(MSONable):
         early_stopper_patience=100,
         gpus=None,
         seed=None,
+        downsample_training_proportion=1.0,
     ):
         """Trains a model. If model is None, will attempt to load one from
         state.
@@ -679,6 +680,7 @@ class SingleEstimator(MSONable):
                 "pin_memory": pin_memory,
                 "num_workers": num_workers,
             },
+            downsample_training_proportion=downsample_training_proportion,
         )
 
         # Execute training
@@ -820,40 +822,40 @@ class Ensemble(MSONable):
             results.append(estimator.predict(x))
         return np.array(results)
 
-    # def train_ensemble_parallel(
-    #     self,
-    #     training_data,
-    #     ensemble_index=0,
-    #     epochs=100,
-    #     lr=None,
-    #     n_jobs=cpu_count() // 2
-    # ):
+    def train_ensemble_parallel(
+        self,
+        training_data,
+        ensemble_index=0,
+        epochs=100,
+        lr=None,
+        n_jobs=cpu_count() // 2
+    ):
 
-    #     warnings.warn(
-    #         "This is highly experimental! Recommended to just train "
-    #         "in serial for now"
-    #     )
+        warnings.warn(
+            "This is highly experimental! Recommended to just train "
+            "in serial for now"
+        )
 
-    #     def _run_wrapper(estimator_index, estimator):
-    #         estimator.train(
-    #             training_data,
-    #             epochs=epochs,
-    #             override_root=self._get_ensemble_model_root(
-    #                 ensemble_index, estimator_index
-    #             ),
-    #             lr=lr,
-    #             parallel=True
-    #         )
-    #         print(
-    #             "Trained ensemble/estimator "
-    #             f"{ensemble_index}/{estimator_index}",
-    #             flush=True
-    #         )
-    #         return deepcopy(estimator)
+        def _run_wrapper(estimator_index, estimator):
+            estimator.train(
+                training_data,
+                epochs=epochs,
+                override_root=self._get_ensemble_model_root(
+                    ensemble_index, estimator_index
+                ),
+                lr=lr,
+                parallel=True
+            )
+            print(
+                "Trained ensemble/estimator "
+                f"{ensemble_index}/{estimator_index}",
+                flush=True
+            )
+            return deepcopy(estimator)
 
-    #     results = Parallel(n_jobs=n_jobs)(
-    #         delayed(_run_wrapper)(ii, estimator)
-    #         for ii, estimator in enumerate(self._estimators)
-    #     )
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(_run_wrapper)(ii, estimator)
+            for ii, estimator in enumerate(self._estimators)
+        )
 
-    #     self._estimators = results
+        self._estimators = results

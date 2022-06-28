@@ -74,6 +74,7 @@ class Data(pl.LightningDataModule):
             "num_workers": 3,
         },
         downsample_training_proportion=1.0,
+        parallel=False,
     ):
         super().__init__()
         if set(list(train.keys())) != set(list(val.keys())):
@@ -104,6 +105,12 @@ class Data(pl.LightningDataModule):
                 keep_prop=downsample_training_proportion,
                 replace=False,
             )
+
+        if parallel:
+            # self._train_loader_kwargs["num_workers"] = 1
+            self._train_loader_kwargs["multiprocessing_context"] = 'fork'
+            # self._val_loader_kwargs["num_workers"] = 1
+            self._val_loader_kwargs["multiprocessing_context"] = 'fork'
 
         self._train_data = (Tensor(xx) for xx in _train)
         self._val_data = (Tensor(xx) for xx in _val)

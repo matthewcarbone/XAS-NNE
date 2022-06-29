@@ -1,26 +1,54 @@
-import os
-import numpy as np
+def process_extended_xyz_file_to_array(extended_xyz_file_path, verbose=True):
+    """Processes an arbitrary extended xyz file to a numpy array.
 
-def md_block():
+    Parameters
+    ----------
+    extended_xyz_file_path : TYPE
+        Description
+    verbose : bool, optional
+        Description
 
-     path = 'D:\\BNL\\MD_Datasets\\benzene.xyz'
+    Returns
+    -------
+    numpy.ndarray
+        An array of 3 dimensions. The first dimension is the "time" or
+        "snapshot" index. The second is the atom index, and the third is the
+        spatial coordinate.
+    """
 
-     input_file =open(path, 'r')
-     block_separator =input_file.readline()
+    with open(extended_xyz_file_path, "r") as input_file:
 
-     lines= input_file.readlines()
-     line_id =0
-     block_id =1
+        # Read all the lines at once
+        lines = input_file.readlines()
 
+        # Get the number of atoms per block, which is always the first line of
+        # either an xyz or extended xyz file
+        n_atoms = int(lines[0].strip())
 
-     for line in lines:
-          line_id += 1
-          
-     if(line_id==15):
-          line_id=1
-          block_id += 1
-          print("Block {}".format(block_id))
+    # We can print some diagnostics to help us debug
+    if verbose:
+        print(
+            f"Read {len(lines)} lines from {extended_xyz_file_path}, each "
+            f"block has {n_atoms} atoms"
+        )
 
-     print("Block {}: Line {}: {}".format(block_id, line_id, line.strip()))
+    # Each "single" xyz file has the following lines:
+    # A single line indicating how many atoms there are in the block
+    # A comment line
+    # n_atoms lines for the species type and coordinates
+    # With this information, we can "chunk" the list into some number of equal
+    # parts each containing 12+2 lines.
+    # Check out a way to do this here:
+    # https://www.delftstack.com/howto/python/
+    # python-split-list-into-chunks/
+    # #split-list-in-python-to-chunks-using-the-lambda-function
+    EXTRA_LINES = 2  # <- no magic numbers
+    offset = n_atoms + EXTRA_LINES
 
-     coordinates = np.array([1,2], dtype=np.uint32)
+    # List comprehension is much faster than for loops. Try to avoid the latter
+    # when at all possible
+    chunked = [lines[ii:ii + offset] for ii in range(0, len(lines), offset)]
+
+    # More todo here!
+
+    # then return something (a numpy array)!

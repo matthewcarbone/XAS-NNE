@@ -553,6 +553,7 @@ class SingleEstimator(MSONable):
         gpus=None,
         seed=None,
         downsample_training_proportion=1.0,
+        parallel=False,
     ):
         """Trains a model. If model is None, will attempt to load one from
         state.
@@ -682,6 +683,7 @@ class SingleEstimator(MSONable):
                 "num_workers": num_workers,
             },
             downsample_training_proportion=downsample_training_proportion,
+            parallel=parallel,
         )
 
         # Execute training

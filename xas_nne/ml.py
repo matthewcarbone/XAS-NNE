@@ -841,7 +841,7 @@ class Ensemble(MSONable):
 
         def _run_wrapper(estimator_index, estimator):
             estimator.train(
-                training_data,
+                training_data=training_data,
                 epochs=epochs,
                 override_root=self._get_ensemble_model_root(
                     ensemble_index, estimator_index

@@ -231,6 +231,7 @@ class LightningMultiLayerPerceptron(
             high=max_neurons_per_layer,
             size=(n_hidden_layers,)
         )
+        architecture = sorted(list(architecture))
         a = [input_size, *architecture, output_size]
         print(f"Initializing from random architecture: {a}")
         return LightningMultiLayerPerceptron(

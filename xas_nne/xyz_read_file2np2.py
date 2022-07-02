@@ -40,8 +40,11 @@ def process_xyz_list_to_structure(block_separator, xyz_list :list, columns_out:i
     block_energy = ''
     blocks = []
     block_array =[]
+    #The block ID is the number assigned to each snapshot and referenced in the first number in the arrays generated
     block_id_array = []
+    #Indicates the atom
     block_header =[]
+    #Indicates the coordinates
     lines_array =[]
     block_id = 0
     block_line =0

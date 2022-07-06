@@ -283,7 +283,7 @@ class FeffWriter:
                 f.write("END\n")
 
                 
-def load_completed_FEFF_results(path):
+def load_completed_FEFF_results(path, qm9=True):
     """Loads in the feff.in, feff.out and xmu.dat files. Parses the results
     into a dictionary.
 
@@ -319,16 +319,24 @@ def load_completed_FEFF_results(path):
         feff_out = f.readlines()
     
     info = path.parts[-1].split("_")
-    qm9_id = str(int(info[0]))
     absorbing_atom = info[1]
+    if qm9:
+        id_type = "qm9id"
+        _id = str(int(info[0]))
+    else:
+        id_type = "id"
+        _id = str(path.parts[-1])
+    
     site = int(info[2])
     
-    return {
+    dictionary = {
         "spectrum": spectrum,
         "spectrum_metadata": spectrum_metadata,
         "feff.inp": feff_inp,
         "feff.out": feff_out,
-        "qm9id": qm9_id,
         "absorbing_atom": absorbing_atom,
         "site": site
     }
+    
+    dictionary[id_type] = _id
+    return dictionary

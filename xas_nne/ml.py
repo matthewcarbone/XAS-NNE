@@ -682,9 +682,16 @@ class SingleEstimator(MSONable):
                 "pin_memory": pin_memory,
                 "num_workers": num_workers,
             },
+            val_loader_kwargs={
+                "batch_size": batch_size,
+                "persistent_workers": persistent_workers,
+                "pin_memory": pin_memory,
+                "num_workers": num_workers,
+            },
             downsample_training_proportion=downsample_training_proportion,
             parallel=parallel,
         )
+        print("Batch size: ", batch_size)
 
         # Execute training
         trainer.fit(
@@ -831,7 +838,8 @@ class Ensemble(MSONable):
         ensemble_index=0,
         epochs=100,
         lr=None,
-        n_jobs=cpu_count() // 2
+        n_jobs=cpu_count() // 2,
+        **kwargs,
     ):
 
         warnings.warn(
@@ -847,7 +855,8 @@ class Ensemble(MSONable):
                     ensemble_index, estimator_index
                 ),
                 lr=lr,
-                parallel=True
+                parallel=True,
+                **kwargs,
             )
             print(
                 "Trained ensemble/estimator "

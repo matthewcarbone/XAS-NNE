@@ -106,16 +106,14 @@ class Data(pl.LightningDataModule):
                 replace=False,
             )
 
-        if parallel:
-            # self._train_loader_kwargs["num_workers"] = 1
-            self._train_loader_kwargs["multiprocessing_context"] = 'fork'
-            # self._val_loader_kwargs["num_workers"] = 1
-            self._val_loader_kwargs["multiprocessing_context"] = 'fork'
-
         self._train_data = (Tensor(xx) for xx in _train)
         self._val_data = (Tensor(xx) for xx in _val)
         self._train_loader_kwargs = train_loader_kwargs
         self._val_loader_kwargs = val_loader_kwargs
+        
+        if parallel:
+            self._train_loader_kwargs["multiprocessing_context"] = 'fork'
+            self._val_loader_kwargs["multiprocessing_context"] = 'fork'
 
     def train_dataloader(self):
         return DataLoader(

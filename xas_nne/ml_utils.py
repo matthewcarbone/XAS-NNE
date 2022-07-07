@@ -45,7 +45,7 @@ def select_data_small_molecule_MD(
     all_other_indexes = list(all_points - set(training_indexes))
     assert set(training_indexes).isdisjoint(set(all_other_indexes))
     if test_index_start is None:
-        test_index_start = max(training_indexes)
+        test_index_start = max(training_indexes) + 1
     assert test_index_start >= max(training_indexes)
     
     data = dict(

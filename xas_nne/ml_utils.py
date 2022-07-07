@@ -53,14 +53,18 @@ def select_data_small_molecule_MD(
             x=loaded_data["x"][training_indexes, :].copy(),
             y=loaded_data["y"][training_indexes, :].copy(),
             grid=loaded_data["grid"],
-            snapshots=[loaded_data["snapshots"][ii] for ii in training_indexes],
+            snapshots=[
+                loaded_data["snapshots"][ii] for ii in training_indexes
+            ],
             sites=[loaded_data["sites"][ii] for ii in training_indexes],
         ),
         test=dict(
             x=loaded_data["x"][test_index_start:, :].copy(),
             y=loaded_data["y"][test_index_start:, :].copy(),
             grid=loaded_data["grid"],
-            snapshots=[xx for xx in loaded_data["snapshots"][test_index_start:]],
+            snapshots=[
+                xx for xx in loaded_data["snapshots"][test_index_start:]
+            ],
             sites=[xx for xx in loaded_data["sites"][test_index_start:]],
         ),
     )

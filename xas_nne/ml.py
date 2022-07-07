@@ -702,7 +702,7 @@ class SingleEstimator(MSONable):
         self._best_checkpoint = trainer.checkpoint_callback.best_model_path
         self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]
 
-    def predict(self, x, model=None):
+    def predict(self, x, model=None, train_mode=False):
         """Makes a prediction on the provided data.
 
         Parameters
@@ -719,7 +719,10 @@ class SingleEstimator(MSONable):
 
         x = torch.Tensor(x)
         with torch.no_grad():
-            model.eval()
+            if train_mode:
+                model.train()
+            else:
+                model.eval()
             return model.forward(x).detach().numpy()
 
 
@@ -818,7 +821,7 @@ class Ensemble(MSONable):
                 **kwargs,
             )
 
-    def predict(self, x):
+    def predict(self, x, train_mode=False):
         """Predicts on the provided data in ``x`` by loading the best models
         from disk.
 
@@ -829,7 +832,7 @@ class Ensemble(MSONable):
 
         results = []
         for estimator in self._estimators:
-            results.append(estimator.predict(x))
+            results.append(estimator.predict(x, train_mode=train_mode))
         return np.array(results)
 
     def train_ensemble_parallel(

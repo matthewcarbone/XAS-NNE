@@ -81,8 +81,8 @@ class LightningMVE(_OptimizerSetter, pl.LightningModule):
 
         (x, y) = batch
         y_hat = self(x)
-        mu = y_hat[:, :self._output_size, :]
-        log_variance = y_hat[:, self._output_size:, :]
+        mu = y_hat[:, :self._output_size]
+        log_variance = y_hat[:, self._output_size:]
         return self._nnl_loss(y, mu, log_variance)
 
     def training_step(self, batch, batch_idx):

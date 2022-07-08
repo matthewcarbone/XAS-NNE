@@ -106,8 +106,8 @@ class Data(pl.LightningDataModule):
                 replace=False,
             )
 
-        self._train_data = (Tensor(xx) for xx in _train)
-        self._val_data = (Tensor(xx) for xx in _val)
+        self._train_data = [Tensor(xx) for xx in _train]
+        self._val_data = [Tensor(xx) for xx in _val]
         self._train_loader_kwargs = train_loader_kwargs
         self._val_loader_kwargs = val_loader_kwargs
         

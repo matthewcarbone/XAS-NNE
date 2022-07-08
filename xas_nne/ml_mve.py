@@ -41,7 +41,8 @@ class LightningMVE(_OptimizerSetter, pl.LightningModule):
         batch_norm=True,
         last_batch_norm=False,
         activation="relu",
-        last_activation=None
+        last_activation=None,
+        print_every_epoch=50,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -60,7 +61,7 @@ class LightningMVE(_OptimizerSetter, pl.LightningModule):
             last_batch_norm=last_batch_norm,
         )
 
-        self._print_every_epoch = 0
+        self._print_every_epoch = print_every_epoch
         self._epoch_dt = 0.0
         self._output_size = output_size
 

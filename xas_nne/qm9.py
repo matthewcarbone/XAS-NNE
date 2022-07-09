@@ -123,28 +123,33 @@ def read_qm9_xyz(xyz_path):
     }
 
 
+def remove_zwitter_ions_(data):
+    """Removes molecules that are classified as Zwitter-ionic. Operates
+    in-place.
+
+    Parameters
+    ----------
+    data : dict
+    """
+
+    where_not_zwitter = np.where(np.array([
+        "+" not in smi and "-" not in smi for smi in data["origin_smiles"]
+    ]) == 1)[0]
+    data["x"] = data["x"][where_not_zwitter, :]
+    data["y"] = data["y"][where_not_zwitter, :]
+    data["names"] = [data["names"][ii] for ii in where_not_zwitter]
+    data["origin_smiles"] = [
+        data["origin_smiles"][ii] for ii in where_not_zwitter
+    ]
+    L = len(data["x"])
+    print(f"Down-sampled to {L} data after removing zwitter ions")
+
+
 def random_split(
     data,
     prop_test=0.1,
-    keep_zwitter=False,
     seed=None,
 ):
-
-    L = len(data["x"])
-    print(f"Original data has {L} data points")
-    if not keep_zwitter:
-        where_not_zwitter = np.where(np.array([
-            "+" not in smi and "-" not in smi for smi in data["origin_smiles"]
-        ]) == 1)[0]
-        print(where_not_zwitter)
-        data["x"] = data["x"][where_not_zwitter, :]
-        data["y"] = data["y"][where_not_zwitter, :]
-        data["names"] = [data["names"][ii] for ii in where_not_zwitter]
-        data["origin_smiles"] = [
-            data["origin_smiles"][ii] for ii in where_not_zwitter
-        ]
-        L = len(data["x"])
-        print(f"Down-sampled to {L} data after removing zwitter ions")
 
     L = len(data["x"])
     n_test = int(L * prop_test)

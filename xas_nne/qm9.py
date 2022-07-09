@@ -145,11 +145,20 @@ def remove_zwitter_ions_(data):
     print(f"Down-sampled to {L} data after removing zwitter ions")
 
 
-def random_split(
-    data,
-    prop_test=0.1,
-    seed=None,
-):
+def random_split(data, prop_test=0.1, seed=123):
+    """Executes a fully random split of the provided data. The provided
+    ``prop_test`` indicates the proportion of the data to reserve for testing.
+
+    Parameters
+    ----------
+    data : dict
+    prop_test : float, optional
+    seed : int, optional
+
+    Returns
+    -------
+    dict
+    """
 
     L = len(data["x"])
     n_test = int(L * prop_test)
@@ -246,17 +255,12 @@ def split_qm9_data_by_number_of_absorbers(
     n_absorbers_in_datapoint = np.array([
         smiles_to_n_absorbers_map[smi] for smi in data["origin_smiles"]
     ])
-    where_zwitter = ~np.array([
-        "+" in smi or "-" in smi for smi in data["origin_smiles"]
-    ])
-    if keep_zwitter:
-        where_zwitter = np.ones_like(where_zwitter)
 
     where_train = np.where(
-        (n_absorbers_in_datapoint <= max_training_absorbers) & where_zwitter
+        (n_absorbers_in_datapoint <= max_training_absorbers)
     )[0]
     where_test = np.where(
-        (n_absorbers_in_datapoint > max_training_absorbers) & where_zwitter
+        (n_absorbers_in_datapoint > max_training_absorbers)
     )[0]
     assert set(list(where_train)).isdisjoint(set(list(where_test)))
 

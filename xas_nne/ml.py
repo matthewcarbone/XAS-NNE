@@ -554,6 +554,7 @@ class SingleEstimator(MSONable):
         seed=None,
         downsample_training_proportion=1.0,
         parallel=False,
+        print_every_epoch=10
     ):
         """Trains a model. If model is None, will attempt to load one from
         state.
@@ -697,7 +698,7 @@ class SingleEstimator(MSONable):
         trainer.fit(
             model=model,
             train_dataloaders=loader,
-            print_every_epoch=epochs // 5
+            print_every_epoch=print_every_epoch
         )
         self._best_checkpoint = trainer.checkpoint_callback.best_model_path
         self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]

@@ -1,0 +1,12 @@
+{
+    "min_layers": 4,
+    "max_layers": 20,
+    "min_neurons_per_layer": 160,
+    "max_neurons_per_layer": 200,
+    "dropout": 0.0,
+    "batch_norm": true,
+    "activation": "leaky_relu",
+    "last_activation": "softplus",
+    "criterion": "mae",
+    "last_batch_norm": false
+}

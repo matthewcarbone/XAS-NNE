@@ -748,6 +748,7 @@ class Ensemble(MSONable):
     def train_ensemble_serial(
         self,
         training_data,
+        validation_data,
         ensemble_index=0,
         epochs=100,
         **kwargs
@@ -771,6 +772,7 @@ class Ensemble(MSONable):
         for ii in range(len(self._estimators)):
             self.train(
                 training_data=training_data,
+                validation_data=validation_data,
                 ensemble_index=ensemble_index,
                 estimator_index=ii,
                 epochs=epochs,
@@ -794,6 +796,7 @@ class Ensemble(MSONable):
     def train_ensemble_parallel(
         self,
         training_data,
+        validation_data,
         ensemble_index=0,
         epochs=100,
         lr=None,
@@ -801,14 +804,10 @@ class Ensemble(MSONable):
         **kwargs,
     ):
 
-        warnings.warn(
-            "This is highly experimental! Recommended to just train "
-            "in serial for now"
-        )
-
         def _run_wrapper(estimator_index, estimator):
             estimator.train(
                 training_data=training_data,
+                validation_data=validation_data,
                 epochs=epochs,
                 override_root=self._get_ensemble_model_root(
                     ensemble_index, estimator_index

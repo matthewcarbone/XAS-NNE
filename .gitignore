@@ -1,3 +1,6 @@
+*.json
+!example_random_kwargs.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

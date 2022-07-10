@@ -34,8 +34,8 @@ def print_data_diagnostics(data):
     keys = ["train", "val", "test"]
     print("Data information as loaded")
     for key in keys:
-        x = data['train']['x'].shape
-        y = data['train']['y'].shape
+        x = data[key]['x'].shape
+        y = data[key]['y'].shape
         print(f"{key} : x~{x} | y~{y}")
 
 
@@ -52,7 +52,7 @@ class SortingHelpFormatter(ArgumentDefaultsHelpFormatter, HelpFormatter):
 def parser(sys_argv):
     ap = argparse.ArgumentParser(formatter_class=SortingHelpFormatter)
     ap.add_argument(
-        '--data-path', dest='data_path', type=str, required=True,
+        '--data-path', dest='data_path', required=True,
         help='The path to the pickled data'
     )
     ap.add_argument(
@@ -94,7 +94,7 @@ def parser(sys_argv):
         '--print-every-epoch', dest='print_every_epoch', type=int, default=100
     )
     ap.add_argument(
-        '--dryrun', dest='dryrun', type=bool, default=False,
+        '--dryrun', dest='dryrun', default=False,
         action="store_true"
     )
 
@@ -110,9 +110,9 @@ if __name__ == '__main__':
     if args.ensemble_name is None:
         tmp = str(Path(args.data_path).stem)
         args.ensemble_name \
-            = Path("Ensembles") / Path(f"{NOW_DATETIME}-{tmp}-ensemble")
+            = str(Path("Ensembles") / Path(f"{NOW}-{tmp}-ensemble"))
     else:
-        args.ensemble_name = f"{NOW}-{tmp}"
+        args.ensemble_name = str(f"{NOW}-{args.ensemble_name}")
     print(f"Ensemble path set to {args.ensemble_name}")
 
     from_random_architecture_kwargs = read_json(args.random_kwargs_json)
@@ -147,11 +147,11 @@ if __name__ == '__main__':
 
     # Save the ensemble metadata
     d = ensemble.as_dict()
-    path = Path(ensemble._root) / Path("Ensemble.json")
+    path = Path(args.ensemble_name) / Path("Ensemble.json")
     save_json(d, path)
 
     # Save the other metadata
-    path = Path(ensemble._root) / Path("args.json")
+    path = Path(args.ensemble_name) / Path("args.json")
     save_json(args_as_dict, path)
-    path = Path(ensemble._root) / Path("random_architecture_kwargs.json")
+    path = Path(args.ensemble_name) / Path("random_architecture_kwargs.json")
     save_json(from_random_architecture_kwargs, path)

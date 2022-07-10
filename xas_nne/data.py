@@ -1,6 +1,6 @@
 import numpy as np
 
-from torch import Tensor
+import torch
 from torch.utils.data import DataLoader, TensorDataset
 import pytorch_lightning as pl
 
@@ -108,8 +108,8 @@ class Data(pl.LightningDataModule):
                 replace=False,
             )
 
-        self._train_data = [Tensor(xx) for xx in _train]
-        self._val_data = [Tensor(xx) for xx in _val]
+        self._train_data = [torch.tensor(xx.copy()).float() for xx in _train]
+        self._val_data = [torch.tensor(xx.copy()).float() for xx in _val]
         self._train_loader_kwargs = train_loader_kwargs
         self._val_loader_kwargs = val_loader_kwargs
         

@@ -145,7 +145,7 @@ def remove_zwitter_ions_(data):
     print(f"Down-sampled to {L} data after removing zwitter ions")
 
 
-def random_split(data, prop_test=0.1, seed=123):
+def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     """Executes a fully random split of the provided data. The provided
     ``prop_test`` indicates the proportion of the data to reserve for testing.
 
@@ -162,14 +162,17 @@ def random_split(data, prop_test=0.1, seed=123):
 
     L = len(data["x"])
     n_test = int(L * prop_test)
-    n_train = L - n_test
-    _train, _test = torch.utils.data.random_split(
+    n_val = int(L * prop_val)
+    n_train = L - n_test - n_val
+    assert n_train > 0
+    _train, _val, _test = torch.utils.data.random_split(
         range(L),
-        [n_train, n_test],
+        [n_train, n_val, n_test],
         generator=torch.Generator().manual_seed(seed) if seed is not None
         else None
     )
     where_train = _train.indices
+    where_val = _val.indices
     where_test = _test.indices
 
     # Now we split these up
@@ -180,6 +183,13 @@ def random_split(data, prop_test=0.1, seed=123):
         "names": [data["names"][ii] for ii in where_train],
         "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
     }
+    val = {
+        "grid": data["grid"],
+        "x": data["x"][where_val, :],
+        "y": data["y"][where_val, :],
+        "names": [data["names"][ii] for ii in where_val],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_val],
+    }
     test = {
         "grid": data["grid"],
         "x": data["x"][where_test, :],
@@ -189,10 +199,11 @@ def random_split(data, prop_test=0.1, seed=123):
     }
 
     L1 = len(train["origin_smiles"])
-    L2 = len(test["origin_smiles"])
-    print(f"Done with {L1} train and {L2} test")
+    L2 = len(val["origin_smiles"])
+    L3 = len(test["origin_smiles"])
+    print(f"Done with {L1} train, {L2} val and {L3} test")
 
-    return {"train": train, "test": test}
+    return {"train": train, "val": val, "test": test}
 
 
 def split_qm9_data_by_number_of_absorbers(

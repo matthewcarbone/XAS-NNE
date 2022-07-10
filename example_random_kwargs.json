@@ -8,5 +8,6 @@
     "activation": "leaky_relu",
     "last_activation": "softplus",
     "criterion": "mae",
-    "last_batch_norm": false
+    "last_batch_norm": false,
+    "sort_architecture": true
 }

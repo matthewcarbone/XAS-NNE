@@ -74,17 +74,9 @@ def parser(sys_argv):
         help='Seeds the random architecture generation process.'
     )
     ap.add_argument(
-        '--ensemble-index', dest='ensemble_index', type=int, default=0,
-        help='The ensemble index.'
-    )
-    ap.add_argument(
         '--max-epochs', dest='max_epochs', type=int, default=5000
     )
-    ap.add_argument(
-        '--max-jobs', dest='max_jobs', type=int, default=3,
-        help='Maximum number of simultaneous trainings to execute. Only works '
-        'well for parallel training on a *single* GPU.'
-    )
+    ap.add_argument('--n-gpu', dest='n_gpu', type=int, default=1,)
     ap.add_argument(
         '--downsample-prop', dest='downsample_prop', type=float, default=0.9,
         help='The percent of the training data to use during training. Used '
@@ -120,12 +112,7 @@ if __name__ == '__main__':
     pprint(from_random_architecture_kwargs)
 
     # Setup the ensemble
-    ensemble = Ensemble.from_random_architectures(
-        root=args.ensemble_name,
-        n_estimators=args.n_estimators,
-        seed=args.architecture_seed,
-        from_random_architecture_kwargs=from_random_architecture_kwargs,
-    )
+    ensemble = Ensemble(root=args.ensemble_name)
 
     # Load the data and print diagnostic information
     data = pickle.load(open(args.data_path, "rb"))
@@ -134,24 +121,14 @@ if __name__ == '__main__':
     if args.dryrun:
         exit(0)
 
-    # Execute training
-    ensemble.train_ensemble_parallel(
+    ensemble.train_ensemble_serial_from_random_architectures(
         training_data=data["train"],
         validation_data=data["val"],
-        ensemble_index=args.ensemble_index,
+        n_estimators=args.n_estimators,
+        from_random_architecture_kwargs=from_random_architecture_kwargs,
+        use_seeds=True,
         epochs=args.max_epochs,
-        n_jobs=args.max_jobs,
-        downsample_training_proportion=args.downsample_prop,   # Bootstrapping
-        print_every_epoch=args.print_every_epoch
+        gpus=args.n_gpu,
+        downsample_training_proportion=args.downsample_prop,
+        print_every_epoch=args.print_every_epoch,
     )
-
-    # Save the ensemble metadata
-    d = ensemble.as_dict()
-    path = Path(args.ensemble_name) / Path("Ensemble.json")
-    save_json(d, path)
-
-    # Save the other metadata
-    path = Path(args.ensemble_name) / Path("args.json")
-    save_json(args_as_dict, path)
-    path = Path(args.ensemble_name) / Path("random_architecture_kwargs.json")
-    save_json(from_random_architecture_kwargs, path)

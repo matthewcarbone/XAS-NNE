@@ -225,7 +225,7 @@ class LightningMultiLayerPerceptron(
         print(
             f"Initializing LightningMultiLayerPerceptron with args: {loc}"
         )
-        hidden_sizes = list(hidden_sizes)
+        hidden_sizes = hidden_sizes.tolist()
         super().__init__()
         self.save_hyperparameters()
 
@@ -677,7 +677,7 @@ class Ensemble(MSONable):
             size=(n_hidden_layers,)
         )
         if sort_architecture:
-            architecture = sorted(list(architecture))
+            architecture = sorted(architecture.tolist())
         model = LightningMultiLayerPerceptron(
             input_size=training_data["x"].shape[1],
             hidden_sizes=architecture,

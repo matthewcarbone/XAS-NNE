@@ -507,6 +507,7 @@ class SingleEstimator(MSONable):
         self,
         *,
         training_data,
+        validation_data,
         model=None,
         override_root=None,
         checkpoint=None,
@@ -628,27 +629,9 @@ class SingleEstimator(MSONable):
             monitor=monitor,
         )
 
-        # Loader
-        L = len(training_data["x"])
-        val_number = int(L * val_prop)
-        train_number = L - val_number
-        train_idx, val_idx = random_split(
-            range(L),
-            [train_number, val_number],
-            generator=torch.Generator().manual_seed(seed) if seed is not None
-            else None
-        )
-        _train_data = {
-            "x": training_data["x"][train_idx, :],
-            "y": training_data["y"][train_idx, :]
-        }
-        _val_data = {
-            "x": training_data["x"][val_idx, :],
-            "y": training_data["y"][val_idx, :]
-        }
         loader = Data(
-            train=_train_data,
-            val=_val_data,
+            train=training_data,
+            val=validation_data,
             train_loader_kwargs={
                 "batch_size": batch_size,
                 "persistent_workers": persistent_workers,

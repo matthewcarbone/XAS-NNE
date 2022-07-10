@@ -174,6 +174,9 @@ def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     where_train = _train.indices
     where_val = _val.indices
     where_test = _test.indices
+    assert set(where_train).isdisjoint(set(where_val))
+    assert set(where_train).isdisjoint(set(where_test))
+    assert set(where_val).isdisjoint(set(where_test))
 
     # Now we split these up
     train = {

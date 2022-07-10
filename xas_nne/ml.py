@@ -328,49 +328,6 @@ class Trainer(pl.Trainer):
                 "might be running overfit_batches, not saving custom metrics"
             )
 
-    @staticmethod
-    def get_best_model_checkpoint_path(path):
-        """Returns the checkpoint path corresponding to the best model.
-
-        Parameters
-        ----------
-        path : os.PathLike
-            The path to the directory containing the checkpoint files.
-
-        Raises
-        ------
-        FileNotFoundError
-            If checkpoint files are missing, or there is any issue with the
-            directory provided.
-
-        Returns
-        -------
-        str
-            The best checkpoint file so far.
-        """
-
-        path = Path(path)
-
-        if not path.exists():
-            raise FileNotFoundError(f"Directory {path} does not exist")
-
-        files = list(path.iterdir())
-        if len(files) == 0:
-            raise FileNotFoundError(f"Directory {path} is empty")
-
-        extensions = [str(f).split(".")[1] == "ckpt" for f in files]
-        if not any(extensions):
-            raise FileNotFoundError(f"Directory {path} has no ckpt files")
-
-        checkpoints = list(path.rglob("*.ckpt"))
-        checkpoints = [
-            [cc, int(str(cc).split("=")[1].split("-")[0])]
-            for cc in checkpoints
-        ]
-        checkpoints.sort(key=lambda x: x[1])
-        checkpoints = [str(cc[0]) for cc in checkpoints]
-        return str(checkpoints[-1])
-
     def fit(self, **kwargs):
         print_every_epoch = 0
         if "print_every_epoch" in kwargs.keys():
@@ -400,6 +357,13 @@ def load_LightningMultiLayerPerceptron_from_ckpt(path):
 class SingleEstimator(MSONable):
 
     def get_default_logger(self):
+        """Returns the CSVLogger object pointed to ``self._root/Logs``.
+
+        Returns
+        -------
+        CSVLogger
+        """
+
         return CSVLogger(self._root, name="Logs")
 
     def get_default_early_stopper(self, **kwargs):
@@ -416,6 +380,8 @@ class SingleEstimator(MSONable):
 
     def get_trainer(
         self,
+        logger=None,
+        early_stopper=None,
         max_epochs=100,
         monitor="val_loss",
         early_stopper_patience=100,
@@ -434,20 +400,26 @@ class SingleEstimator(MSONable):
         Trainer
         """
 
-        logger = self.get_default_logger()
-        early_stopper = self.get_default_early_stopper(
-            monitor=monitor,
-            check_finite=True,
-            patience=early_stopper_patience,
-            verbose=False
-        )
+        local = {
+            key: value for key, value in locals().items() if key != "self"
+        }
+        print(f"Setting TRAINER: {local}")
+
+        if logger is None:
+            logger = self.get_default_logger()
+        if early_stopper is None:
+            early_stopper = self.get_default_early_stopper(
+                monitor=monitor,
+                check_finite=True,
+                patience=early_stopper_patience,
+                verbose=False
+            )
         cuda = torch.cuda.is_available()
         checkpointer = ModelCheckpoint(
             dirpath=f"{self._root}/Checkpoints",
             save_top_k=5,
             monitor=monitor
         )
-        print(f"Setting trainer with cuda={cuda}")
 
         if gpus is None:
             gpus = int(cuda)
@@ -480,7 +452,7 @@ class SingleEstimator(MSONable):
         local = {
             key: value for key, value in locals().items() if key != "model"
         }
-        print(f"Setting optimizer family: {local}")
+        print(f"Setting OPTIMIZER and SCHEDULER: {local}")
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,

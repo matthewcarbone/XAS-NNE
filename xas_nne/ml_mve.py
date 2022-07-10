@@ -72,8 +72,8 @@ class LightningMVE(_OptimizerSetter, pl.LightningModule):
 
     @staticmethod
     def _nnl_loss(y, mu, log_variance):
-        variance_contribution = 0.5 * log_variance
-        combined = (y - mu)**2 / (2.0 * torch.exp(log_variance))
+        variance_contribution = (0.5 * log_variance).mean()
+        combined = (torch.abs(y - mu) / 2.0 * torch.exp(-log_variance)).mean()
         return {"s2_loss": variance_contribution, "scaled_mse_loss": combined}
 
     def _single_forward_step(self, batch, batch_index):

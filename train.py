@@ -93,6 +93,10 @@ def parser(sys_argv):
     ap.add_argument(
         '--print-every-epoch', dest='print_every_epoch', type=int, default=100
     )
+    ap.add_argument(
+        '--dryrun', dest='dryrun', type=bool, default=False,
+        action="store_true"
+    )
 
     return ap.parse_args(sys_argv)
 
@@ -105,8 +109,11 @@ if __name__ == '__main__':
 
     if args.ensemble_name is None:
         tmp = str(Path(args.data_path).stem)
-        tmp = Path("Ensembles") / Path(f"{tmp}-ensemble")
-        print(f"Ensemble path not provided, set to {tmp}")
+        args.ensemble_name \
+            = Path("Ensembles") / Path(f"{NOW_DATETIME}-{tmp}-ensemble")
+    else:
+        args.ensemble_name = f"{NOW}-{tmp}"
+    print(f"Ensemble path set to {args.ensemble_name}")
 
     from_random_architecture_kwargs = read_json(args.random_kwargs_json)
     print("Random kwargs architecture parameters")
@@ -123,6 +130,9 @@ if __name__ == '__main__':
     # Load the data and print diagnostic information
     data = pickle.load(open(args.data_path, "rb"))
     print_data_diagnostics(data)
+
+    if args.dryrun:
+        exit(0)
 
     # Execute training
     ensemble.train_ensemble_parallel(

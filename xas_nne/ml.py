@@ -682,7 +682,7 @@ class Ensemble(MSONable):
         self,
         training_data,
         validation_data,
-        estimator_indexes=[ii for ii in range(10)],
+        n_estimators=10,
         from_random_architecture_kwargs={
             "min_layers": 4,
             "max_layers": 8,
@@ -709,7 +709,7 @@ class Ensemble(MSONable):
             Description
         validation_data : TYPE
             Description
-        estimator_indexes : TYPE, optional
+        n_estimators : TYPE, optional
             Description
         from_random_architecture_kwargs : dict, optional
             Description
@@ -720,6 +720,7 @@ class Ensemble(MSONable):
             Description
         """
 
+        estimator_indexes = [ii for ii in range(n_estimators)]
         L = len(self._estimators)
         if L > 0:
             estimator_indexes = [xx + L for xx in estimator_indexes]

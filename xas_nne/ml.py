@@ -502,7 +502,9 @@ class SingleEstimator(MSONable):
 
         self._latest_train_args = {
             key: value for key, value in locals().items()
-            if key not in ["model", "training_data", "validation_data"]
+            if key not in [
+                "model", "training_data", "validation_data", "self"
+            ]
         }
 
         # Execute the training using a lot of defaults/boilerplate

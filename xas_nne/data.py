@@ -41,8 +41,9 @@ def random_downsample(arrays, keep_prop=0.9, replace=False, seed=None):
         replace=replace,
         p=None
     )
-    print(f"random sampled choice indexes: {choice[:10]} ...")
-    print(f"LEN={len(choice)}")
+    print(
+        f"random sampled choice indexes: {choice[:10]} ... LEN={len(choice)}"
+    )
     return [arr[choice, ...] for arr in arrays]
 
 

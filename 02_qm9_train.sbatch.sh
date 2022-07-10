@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 #SBATCH -A mlg-core
-#SBATCH -p volta
-#SBATCH -t 24:00:00
+#SBATCH -p voltadebug
+#SBATCH -t 00:30:00
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 3
+#SBATCH -c 5
 #SBATCH --gres=gpu:1
 #SBATCH --output=Logs/job_data/test_gpu_%A.out
 #SBATCH --error=Logs/job_data/test_gpu_%A.err

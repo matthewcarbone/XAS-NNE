@@ -5,6 +5,6 @@
 #     rm "$PID_FILE$"
 # fi
 
-python3 train.py --data-path data/qm9/ml_ready/XANES-220710-ACSF-O-RANDOM-SPLITS.pkl
+python3 02_train.py --data-path data/qm9/ml_ready/XANES-220710-ACSF-O-RANDOM-SPLITS.pkl
 # echo $! >> "$PID_FILE"
 # wait

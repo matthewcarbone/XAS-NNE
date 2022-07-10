@@ -217,6 +217,14 @@ class LightningMultiLayerPerceptron(
         criterion="mae",
         last_batch_norm=False,
     ):
+
+        loc = {
+            key: value for key, value in locals().items()
+            if key != "self"
+        }
+        print(
+            f"Initializing LightningMultiLayerPerceptron with args: {loc}"
+        )
         super().__init__()
         self.save_hyperparameters()
 

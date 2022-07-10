@@ -552,6 +552,9 @@ class SingleEstimator(MSONable):
 
         self._best_checkpoint = trainer.checkpoint_callback.best_model_path
 
+        path = Path(self._root) / Path("estimator.json")
+        save_json(self.as_dict(), path)
+
     def predict(self, x, model=None):
         """Makes a prediction on the provided data.
 
@@ -615,6 +618,10 @@ class Ensemble(MSONable):
             **kwargs,
         )
         self._estimators.append(estimator)
+
+        # Dump current state
+        path = Path(self._root) / Path("ensemble.json")
+        save_json(self.as_dict(), path)
 
     def train_from_random_architecture(
         self,

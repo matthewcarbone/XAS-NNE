@@ -225,6 +225,7 @@ class LightningMultiLayerPerceptron(
         print(
             f"Initializing LightningMultiLayerPerceptron with args: {loc}"
         )
+        hidden_sizes = list(hidden_sizes)
         super().__init__()
         self.save_hyperparameters()
 
@@ -293,6 +294,7 @@ class Trainer(pl.Trainer):
             print(
                 "might be running overfit_batches, not saving custom metrics"
             )
+            print(f"Current columns: {list(df.columns)}")
 
     def fit(self, **kwargs):
         print_every_epoch = 0

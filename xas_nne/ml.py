@@ -225,7 +225,7 @@ class LightningMultiLayerPerceptron(
         print(
             f"Initializing LightningMultiLayerPerceptron with args: {loc}"
         )
-        hidden_sizes = hidden_sizes.tolist()
+        hidden_sizes = np.array(hidden_sizes).tolist()
         super().__init__()
         self.save_hyperparameters()
 

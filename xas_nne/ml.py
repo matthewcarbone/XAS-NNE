@@ -24,6 +24,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from xas_nne.data import Data
+from xas_nne.utils import read_json, save_json
 
 
 def _activation_map(s):
@@ -203,49 +204,6 @@ class LightningMultiLayerPerceptron(
     _OptimizerSetter, _GeneralPLModule, pl.LightningModule
 ):
 
-    @classmethod
-    def from_random_architecture(
-        cls,
-        input_size,
-        output_size,
-        min_layers=3,
-        max_layers=7,
-        min_neurons_per_layer=80,
-        max_neurons_per_layer=120,
-        dropout=0.0,
-        batch_norm=False,
-        activation="relu",
-        last_activation=None,
-        criterion="mse",
-        last_batch_norm=False,
-        seed=None,
-    ):
-
-        np.random.seed(seed)
-        n_hidden_layers = np.random.randint(
-            low=min_layers,
-            high=max_layers + 1
-        )
-        architecture = np.random.randint(
-            low=min_neurons_per_layer,
-            high=max_neurons_per_layer,
-            size=(n_hidden_layers,)
-        )
-        architecture = sorted(list(architecture))
-        a = [input_size, *architecture, output_size]
-        print(f"Initializing from random architecture: {a}")
-        return LightningMultiLayerPerceptron(
-            input_size=input_size,
-            hidden_sizes=architecture,
-            output_size=output_size,
-            dropout=dropout,
-            batch_norm=batch_norm,
-            activation=activation,
-            last_activation=last_activation,
-            criterion=criterion,
-            last_batch_norm=last_batch_norm,
-        )
-
     def __init__(
         self,
         *,
@@ -355,6 +313,9 @@ def load_LightningMultiLayerPerceptron_from_ckpt(path):
 
 
 class SingleEstimator(MSONable):
+    """The single estimator is a container for metadata that "points" to a
+    saved model, and handles all training and metadata tracking. The models
+    are not contained in the Estimator."""
 
     def get_default_logger(self):
         """Returns the CSVLogger object pointed to ``self._root/Logs``.
@@ -366,22 +327,26 @@ class SingleEstimator(MSONable):
 
         return CSVLogger(self._root, name="Logs")
 
-    def get_default_early_stopper(self, **kwargs):
-        """Gets the default early stopper. Some of the defaults should be
-        something like
+    @staticmethod
+    def get_default_early_stopper(
+        monitor="val_loss",
+        check_finite=True,
+        patience=100,
+        verbose=False,
+        **kwargs
+    ):
+        """Gets the default early stopper."""
 
-        monitor="val_loss"
-        check_finite=True
-        patience=100
-        verbose=False
-        """
-
-        return EarlyStopping(**kwargs)
+        return EarlyStopping(
+            monitor=monitor,
+            check_finite=check_finite,
+            patience=patience,
+            verbose=verbose,
+            **kwargs
+        )
 
     def get_trainer(
         self,
-        logger=None,
-        early_stopper=None,
         max_epochs=100,
         monitor="val_loss",
         early_stopper_patience=100,
@@ -405,20 +370,19 @@ class SingleEstimator(MSONable):
         }
         print(f"Setting TRAINER: {local}")
 
-        if logger is None:
-            logger = self.get_default_logger()
-        if early_stopper is None:
-            early_stopper = self.get_default_early_stopper(
-                monitor=monitor,
-                check_finite=True,
-                patience=early_stopper_patience,
-                verbose=False
-            )
+        logger = self.get_default_logger()
+        early_stopper = self.get_default_early_stopper(
+            monitor=monitor,
+            check_finite=True,
+            patience=early_stopper_patience,
+            verbose=False
+        )
+
         cuda = torch.cuda.is_available()
         checkpointer = ModelCheckpoint(
             dirpath=f"{self._root}/Checkpoints",
             save_top_k=5,
-            monitor=monitor
+            monitor="val_loss"
         )
 
         if gpus is None:
@@ -483,133 +447,63 @@ class SingleEstimator(MSONable):
     def __init__(
         self,
         root=None,
-        from_random_architecture_kwargs={
-            "min_layers": 3,
-            "max_layers": 7,
-            "min_neurons_per_layer": 150,
-            "max_neurons_per_layer": 200,
-            "dropout": 0.0,
-            "batch_norm": True,
-            "activation": "relu",
-            "criterion": "mae",
-            "last_activation": "softplus",
-            "last_batch_norm": False,
-        },
         best_checkpoint=None,
-        last_lr=None
+        latest_train_args=None
     ):
         self._set_root(root)
         self._best_checkpoint = best_checkpoint
-        self._last_lr = last_lr
-        self._from_random_architecture_kwargs = from_random_architecture_kwargs
+        self._latest_train_args = latest_train_args
 
     def train(
         self,
         *,
+        model,
         training_data,
         validation_data,
-        model=None,
-        override_root=None,
-        checkpoint=None,
-        val_prop=0.1,
         batch_size=4096,
         persistent_workers=True,
         pin_memory=True,
         num_workers=3,
         epochs=100,
-        lr=None,
-        patience=10,
+        lr=1e-2,
+        patience=20,
         min_lr=1e-7,
         factor=0.95,
         monitor="val_loss",
         early_stopper_patience=100,
         gpus=None,
-        seed=None,
         downsample_training_proportion=1.0,
-        parallel=False,
+        multiprocessing_context_fork=False,
         print_every_epoch=10
     ):
-        """Trains a model. If model is None, will attempt to load one from
-        state.
+        """Trains a model.
 
         Parameters
         ----------
-        training_data : numpy.array
-            Description
-        model : None, optional
-            Description
-        checkpoint : None, optional
-            Description
-        val_prop : float, optional
-            Description
+        model : LightningMultiLayerPerceptron, optional
+        training_data : numpy.ndarray
+        validation_data : numpy.ndarray
         batch_size : int, optional
-            Description
         persistent_workers : bool, optional
-            Description
         pin_memory : bool, optional
-            Description
         num_workers : int, optional
-            Description
         epochs : int, optional
-            Description
-        override_root : None, optional
-            Description
         lr : float, optional
-            Description
         patience : int, optional
-            Description
         min_lr : float, optional
-            Description
         factor : float, optional
-            Description
         monitor : str, optional
-            Description
         early_stopper_patience : int, optional
-            Description
         gpus : None, optional
-            Description
-        seed : None, optional
-            Description
+        downsample_training_proportion : float, optional
+        parallel : bool, optional
+        print_every_epoch : int, optional
         """
 
-        if seed is not None:
-            seed_everything(seed)
-
-        if model is None:
-            if checkpoint is not None:
-                model = LightningMultiLayerPerceptron.load_from_checkpoint(
-                    checkpoint
-                )
-                print(f"Reloaded model from provided {checkpoint}")
-            elif self._best_checkpoint is not None:
-                model = self.best_model
-                print(
-                    "Initialized model from best stored model at "
-                    f"{self._best_checkpoint}"
-                )
-            else:
-                model = LightningMultiLayerPerceptron.from_random_architecture(
-                    input_size=training_data["x"].shape[1],
-                    output_size=training_data["y"].shape[1],
-                    **self._from_random_architecture_kwargs
-                )
-                print(
-                    "Initialized model from random architecture using "
-                    f"arguments {self._from_random_architecture_kwargs}"
-                )
-
-        if lr is None:
-            if self._last_lr is not None:
-                lr = self._last_lr
-                print(f"Learning rate loaded from stored: {lr}")
-            else:
-                lr = 1e-2  # Good default
-
-        # After loading the data from root, we can override it to save to a
-        # new location
-        if override_root is not None:
-            print(f"Root set to {override_root}")
-            self._set_root(override_root)
+        self._latest_train_args = {
+            key: value for key, value in locals().items()
+            if key not in ["model", "training_data", "validation_data"]
+        }
 
         # Execute the training using a lot of defaults/boilerplate
         self.set_optimizer_family(
@@ -621,7 +515,6 @@ class SingleEstimator(MSONable):
             monitor=monitor,
         )
 
-        # Trainer
         trainer = self.get_trainer(
             max_epochs=epochs,
             early_stopper_patience=early_stopper_patience,
@@ -645,9 +538,8 @@ class SingleEstimator(MSONable):
                 "num_workers": num_workers,
             },
             downsample_training_proportion=downsample_training_proportion,
-            parallel=parallel,
+            parallel=multiprocessing_context_fork,
         )
-        print("Batch size: ", batch_size)
 
         # Execute training
         trainer.fit(
@@ -655,10 +547,10 @@ class SingleEstimator(MSONable):
             train_dataloaders=loader,
             print_every_epoch=print_every_epoch
         )
-        self._best_checkpoint = trainer.checkpoint_callback.best_model_path
-        self._last_lr = trainer.optimizers[0].param_groups[0]["lr"]
 
-    def predict(self, x, model=None, train_mode=False):
+        self._best_checkpoint = trainer.checkpoint_callback.best_model_path
+
+    def predict(self, x, model=None):
         """Makes a prediction on the provided data.
 
         Parameters
@@ -674,21 +566,123 @@ class SingleEstimator(MSONable):
             model = self.best_model
 
         x = torch.Tensor(x)
+        model.eval()
         with torch.no_grad():
-            if train_mode:
-                model.train()
-            else:
-                model.eval()
             return model.forward(x).detach().numpy()
 
 
 class Ensemble(MSONable):
 
-    @classmethod
-    def from_random_architectures(
-        cls,
-        root,
-        n_estimators=10,
+    @property
+    def root(self):
+        return self._root
+
+    @property
+    def estimators(self):
+        return self._estimators
+
+    def __init__(self, root, estimators=[]):
+        self._root = str(root)
+        self._estimators = estimators
+
+    def _get_ensemble_model_root(self, estimator_index):
+        return Path(self._root) / Path(f"{estimator_index:06}")
+
+    def train(
+        self,
+        *,
+        model,
+        training_data,
+        validation_data,
+        estimator_index=None,
+        **kwargs
+    ):
+        if estimator_index is None:
+            # Check the length of the current dictionary
+            L = len(self._estimators)
+            if L == 0:
+                estimator_index = 0
+            else:
+                estimator_index = L + 1
+        root = self._get_ensemble_model_root(estimator_index)
+        estimator = SingleEstimator(root=root)
+        estimator.train(
+            model=model,
+            training_data=training_data,
+            validation_data=validation_data,
+            **kwargs,
+        )
+        self._estimators.append(estimator)
+
+    def train_from_random_architecture(
+        self,
+        *,
+        training_data,
+        validation_data,
+        estimator_index=None,
+        min_layers=4,
+        max_layers=8,
+        min_neurons_per_layer=160,
+        max_neurons_per_layer=300,
+        dropout=0.0,
+        batch_norm=True,
+        activation="leaky_relu",
+        last_activation="softplus",
+        criterion="mae",
+        last_batch_norm=False,
+        sort_architecture=False,
+        seed=None,
+        **kwargs
+    ):
+        """Executes a training procedure but initializes the
+        ``LightningMultiLayerPerceptron`` from a random architecture.
+
+        Parameters
+        ----------
+        training_data : numpy.ndarray
+        validation_data : numpy.ndarray
+        estimator_index : int, optional
+        **kwargs
+            Extra keyword arguments to pass through to training.
+        """
+
+        if seed is not None:
+            np.random.seed(seed)
+        n_hidden_layers = np.random.randint(
+            low=min_layers,
+            high=max_layers + 1
+        )
+        architecture = np.random.randint(
+            low=min_neurons_per_layer,
+            high=max_neurons_per_layer,
+            size=(n_hidden_layers,)
+        )
+        if sort_architecture:
+            architecture = sorted(list(architecture))
+        model = LightningMultiLayerPerceptron(
+            input_size=training_data["x"].shape[1],
+            hidden_sizes=architecture,
+            output_size=training_data["y"].shape[1],
+            dropout=dropout,
+            batch_norm=batch_norm,
+            activation=activation,
+            last_activation=last_activation,
+            criterion=criterion,
+            last_batch_norm=last_batch_norm,
+        )
+        self.train(
+            model=model,
+            training_data=training_data,
+            validation_data=validation_data,
+            estimator_index=estimator_index,
+            **kwargs
+        )
+
+    def train_ensemble_serial_from_random_architectures(
+        self,
+        training_data,
+        validation_data,
+        estimator_indexes=[ii for ii in range(10)],
         from_random_architecture_kwargs={
             "min_layers": 4,
             "max_layers": 8,
@@ -697,60 +691,12 @@ class Ensemble(MSONable):
             "dropout": 0.0,
             "batch_norm": True,
             "activation": "leaky_relu",
-            "last_activation": "relu",
+            "last_activation": "softplus",
             "criterion": "mae",
             "last_batch_norm": False,
+            "sort_architecture": False,
         },
-        seed=None
-    ):
-        if Path(root).exists():
-            now = datetime.now().strftime("%y%m%d-%H%M%S")
-            old_root = str(root) + f"-{now}"
-            rename(str(root), old_root)
-            print(f"Renamed existing root {root} to {old_root}")
-        if seed is not None:
-            seed_everything(seed)
-        estimators = [
-            SingleEstimator(
-                from_random_architecture_kwargs=from_random_architecture_kwargs
-            )
-            for _ in range(n_estimators)
-        ]
-        return cls(root, estimators)
-
-    def __init__(self, root, estimators):
-        self._root = str(root)
-        self._estimators = estimators
-
-    def _get_ensemble_model_root(self, ensemble_index, estimator_index):
-        return Path(self._root) / Path(f"{ensemble_index:06}") / \
-            Path(f"{estimator_index:06}")
-
-    def train(
-        self,
-        training_data,
-        ensemble_index=0,
-        estimator_index=0,
-        epochs=100,
-        **kwargs
-    ):
-        print(f"Training estimator {estimator_index}")
-        estimator = self._estimators[estimator_index]
-        estimator.train(
-            training_data=training_data,
-            epochs=epochs,
-            override_root=self._get_ensemble_model_root(
-                ensemble_index, estimator_index
-            ),
-            **kwargs,
-        )
-
-    def train_ensemble_serial(
-        self,
-        training_data,
-        validation_data,
-        ensemble_index=0,
-        epochs=100,
+        use_seeds=False,
         **kwargs
     ):
         """Trains the entire ensemble in serial. Default behavior is to
@@ -761,25 +707,37 @@ class Ensemble(MSONable):
         ----------
         training_data : TYPE
             Description
-        ensemble_index : int, optional
+        validation_data : TYPE
             Description
-        epochs : int, optional
+        estimator_indexes : TYPE, optional
             Description
-        lr : None, optional
+        from_random_architecture_kwargs : dict, optional
+            Description
+        use_seeds : bool, optional
+            If True, uses ``seed==estimator_index`` for generating the random
+            architectures.
+        **kwargs
             Description
         """
 
-        for ii in range(len(self._estimators)):
-            self.train(
+        L = len(self._estimators)
+        if L > 0:
+            estimator_indexes = [xx + L for xx in estimator_indexes]
+            print(
+                "Ensemble already has estimators: new estimator indexes "
+                f"are {estimator_indexes}"
+            )
+        for estimator_index in estimator_indexes:
+            self.train_from_random_architecture(
                 training_data=training_data,
                 validation_data=validation_data,
-                ensemble_index=ensemble_index,
-                estimator_index=ii,
-                epochs=epochs,
-                **kwargs,
+                estimator_index=estimator_index,
+                **from_random_architecture_kwargs,
+                seed=estimator_index if use_seeds else None,
+                **kwargs
             )
 
-    def predict(self, x, train_mode=False):
+    def predict(self, x):
         """Predicts on the provided data in ``x`` by loading the best models
         from disk.
 
@@ -790,42 +748,42 @@ class Ensemble(MSONable):
 
         results = []
         for estimator in self._estimators:
-            results.append(estimator.predict(x, train_mode=train_mode))
+            results.append(estimator.predict(x))
         return np.array(results)
 
-    def train_ensemble_parallel(
-        self,
-        training_data,
-        validation_data,
-        ensemble_index=0,
-        epochs=100,
-        lr=None,
-        n_jobs=cpu_count() // 2,
-        **kwargs,
-    ):
+    # def train_ensemble_parallel(
+    #     self,
+    #     training_data,
+    #     validation_data,
+    #     ensemble_index=0,
+    #     epochs=100,
+    #     lr=None,
+    #     n_jobs=cpu_count() // 2,
+    #     **kwargs,
+    # ):
 
-        def _run_wrapper(estimator_index, estimator):
-            estimator.train(
-                training_data=training_data,
-                validation_data=validation_data,
-                epochs=epochs,
-                override_root=self._get_ensemble_model_root(
-                    ensemble_index, estimator_index
-                ),
-                lr=lr,
-                parallel=True,
-                **kwargs,
-            )
-            print(
-                "Trained ensemble/estimator "
-                f"{ensemble_index}/{estimator_index}",
-                flush=True
-            )
-            return deepcopy(estimator)
+    #     def _run_wrapper(estimator_index, estimator):
+    #         estimator.train(
+    #             training_data=training_data,
+    #             validation_data=validation_data,
+    #             epochs=epochs,
+    #             override_root=self._get_ensemble_model_root(
+    #                 ensemble_index, estimator_index
+    #             ),
+    #             lr=lr,
+    #             parallel=True,
+    #             **kwargs,
+    #         )
+    #         print(
+    #             "Trained ensemble/estimator "
+    #             f"{ensemble_index}/{estimator_index}",
+    #             flush=True
+    #         )
+    #         return deepcopy(estimator)
 
-        results = Parallel(n_jobs=n_jobs)(
-            delayed(_run_wrapper)(ii, estimator)
-            for ii, estimator in enumerate(self._estimators)
-        )
+    #     results = Parallel(n_jobs=n_jobs)(
+    #         delayed(_run_wrapper)(ii, estimator)
+    #         for ii, estimator in enumerate(self._estimators)
+    #     )
 
-        self._estimators = results
+    #     self._estimators = results

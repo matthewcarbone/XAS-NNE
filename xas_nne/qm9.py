@@ -275,6 +275,7 @@ def split_qm9_data_by_number_of_total_atoms(
     data,
     max_training_atoms_per_molecule=7,
     prop_val=0.1,
+    prop_test=0.1,
     seed=123
 ):
     """A helper function for preparing molecular data that resolves the
@@ -313,22 +314,43 @@ def split_qm9_data_by_number_of_total_atoms(
         sum(atom_count(smi).values()) for smi in data["origin_smiles"]
     ])
 
-    _where_train = np.where(
-        (n_total_in_datapoint <= max_training_atoms_per_molecule)
-    )[0]
-    
+    # First, we get the SAME (as long as seed is not None) testing set
+    # as a random sample of the data.
     np.random.seed(seed)
-    l_valid = int(len(_where_train) * prop_val)
-    np.random.shuffle(_where_train)
-    where_val = _where_train[:l_valid]
-    where_train = _where_train[l_valid:]
+    L = data["x"].shape[0]
+    all_indexes = np.array([ii for ii in range(L)])
+    np.random.shuffle(all_indexes)
+    all_indexes = all_indexes.tolist()
+    l_test = int(L * prop_test)
+    l_val = int(L * prop_val)
+    _where_test = all_indexes[:l_test]
+    _where_val = all_indexes[l_test:l_val]
+    _where_train = all_indexes[l_val:]
+    print("Indexes:")
+    print(f"\twhere_test={_where_test[:10]}...")
+    print(f"\twhere_val={_where_val[:10]}...")
+    print(f"\twhere_train={_where_train[:10]}...")
 
-    where_test = np.where(
-        (n_total_in_datapoint > max_training_atoms_per_molecule)
-    )[0]
+    _where_leq_max_training_atoms_per_molecule = np.where(
+        (n_total_in_datapoint <= max_training_atoms_per_molecule)
+    )[0].tolist()
+
+    # Convert everything into sets for the next operations
+    _where_val = set(_where_val)
+    _where_train = set(_where_train)
+    _where_leq_max_training_atoms_per_molecule \
+        = set(_where_leq_max_training_atoms_per_molecule)
+
+    # The testing set is the testing set, and should remain unchanged
+    _where_train = _where_train.intersect(
+        _where_leq_max_training_atoms_per_molecule
+    )
+    _where_val = _where_val.intersect(
+        _where_leq_max_training_atoms_per_molecule
+    )
 
     d = _qm9_train_val_test_from_data(
-        data, where_train, where_val, where_test
+        data, list(_where_train), list(_where_val), _where_test
     )
 
     _triple_check_splits_by_atom_number(d)

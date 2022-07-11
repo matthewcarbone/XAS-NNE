@@ -1,6 +1,6 @@
 #!/bin/bash -l
 
-EXECUTABLE="echo"
+
 
 WORKDIR=/hpcgpfs01/work/cfn/mcarbone/XAS-NNE
 N_ENSEMBLES=30
@@ -10,6 +10,12 @@ N_GPU=1
 
 run_random_qm9()
 {
+
+    if [ "$1" == "execute" ]; then
+        executable="sbatch"
+    else
+        executable="echo"
+    fi
     declare -a paths=(
         "XANES-220710-ACSF-O-RANDOM-SPLITS-PCA-decomp-maxcol-21"
         "XANES-220710-ACSF-N-RANDOM-SPLITS-PCA-decomp-maxcol-25"
@@ -20,7 +26,7 @@ run_random_qm9()
 
     for path in "${paths[@]}"; do
         for downsample_prop in "${downsample_values[@]}"; do
-            "$EXECUTABLE" .02_qm9_train.sbatch.sh \
+            "$executable" .02_qm9_train.sbatch.sh \
                 --data-path "$WORKDIR"/"$path".pkl \
                 --ensemble-name Ensembles/"$path"/"$downsample_prop" \
                 --downsample-prop "$downsample_prop" \
@@ -31,4 +37,4 @@ run_random_qm9()
     done
 }
 
-run_random_qm9
+run_random_qm9 "$1"

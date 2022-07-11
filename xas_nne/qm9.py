@@ -324,8 +324,8 @@ def split_qm9_data_by_number_of_total_atoms(
     l_test = int(L * prop_test)
     l_val = int(L * prop_val)
     _where_test = all_indexes[:l_test]
-    _where_val = all_indexes[l_test:l_val]
-    _where_train = all_indexes[l_val:]
+    _where_val = all_indexes[l_test:l_val+l_test]
+    _where_train = all_indexes[l_val+l_test:]
     print("Indexes:")
     print(f"\twhere_test={_where_test[:10]}...")
     print(f"\twhere_val={_where_val[:10]}...")

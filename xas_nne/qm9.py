@@ -342,10 +342,10 @@ def split_qm9_data_by_number_of_total_atoms(
         = set(_where_leq_max_training_atoms_per_molecule)
 
     # The testing set is the testing set, and should remain unchanged
-    _where_train = _where_train.intersect(
+    _where_train = _where_train.intersection(
         _where_leq_max_training_atoms_per_molecule
     )
-    _where_val = _where_val.intersect(
+    _where_val = _where_val.intersection(
         _where_leq_max_training_atoms_per_molecule
     )
 

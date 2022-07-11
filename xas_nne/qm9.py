@@ -2,11 +2,11 @@
 
 from collections import Counter
 from functools import cache
+import random
 
 import numpy as np
 from rdkit import Chem
 import torch
-from tqdm import tqdm
 
 
 def parse_QM9_scalar_properties(props, selected_properties=None):
@@ -191,27 +191,29 @@ def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
     where_val = np.array(where_val)
     where_test = np.array(where_test)
 
+    list_keys = [xx for xx in data.keys() if xx not in ["grid", "x", "y"]]
+
     train = {
         "grid": data["grid"],
         "x": data["x"][where_train, :],
         "y": data["y"][where_train, :],
-        "names": [data["names"][ii] for ii in where_train],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
     }
     val = {
         "grid": data["grid"],
         "x": data["x"][where_val, :],
         "y": data["y"][where_val, :],
-        "names": [data["names"][ii] for ii in where_val],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_val],
     }
     test = {
         "grid": data["grid"],
         "x": data["x"][where_test, :],
         "y": data["y"][where_test, :],
-        "names": [data["names"][ii] for ii in where_test],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
     }
+
+    # Take care of the remaining keys that weren't x, y, or grid
+    for key in list_keys:
+        train[key] = [data[key][ii] for ii in where_train]
+        val[key] = [data[key][ii] for ii in where_val]
+        test[key] = [data[key][ii] for ii in where_test]
 
     L1 = len(train["origin_smiles"])
     L2 = len(val["origin_smiles"])
@@ -256,11 +258,14 @@ def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     )
 
 
-def _triple_check_splits_by_atom_number(d):
+def _check_names_disjoint(d):
 
     assert set(d["train"]["names"]).isdisjoint(set(d["val"]["names"]))
     assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
     assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
+
+
+def _check_smiles_disjoint(d):
 
     # Molecules i.e. SMILES should also be disjoint between the TEST and TRAIN
     # sets, NOT the VAL and TRAIN sets.
@@ -278,12 +283,15 @@ def _triple_check_splits_by_atom_number(d):
 def split_qm9_data_by_number_of_total_atoms(
     data,
     max_training_atoms_per_molecule=7,
+    test_atoms_per_molecule=9,
     prop_val=0.1,
-    prop_test=0.1,
     seed=123
 ):
     """A helper function for preparing molecular data that resolves the
     training and testing sets by the number of total atoms in the molecule.
+    This is exclusively used for our generalization test, to see how well the
+    models perform when tasked with training on smaller molecules and
+    predicting on larger ones.
 
     .. note::
 
@@ -297,11 +305,14 @@ def split_qm9_data_by_number_of_total_atoms(
         and targets, respectively. More keys are required for additional
         functionality.
     max_training_atoms_per_molecule : int, optional
-        Description
+        The maximum number of atoms/molecule in the training and validation
+        sets.
+    test_atoms_per_molecule : int, optional
+        The number of atoms/molecule in the testing set.
     prop_val : float, optional
         The proportion of the training set to use for cross-validation.
     seed : None, optional
-        Deterministic split of the training and validation sets.
+        Deterministic split of the validation set.
 
     Returns
     -------
@@ -309,57 +320,37 @@ def split_qm9_data_by_number_of_total_atoms(
         A dictionary of of dictionaries, with keys as "train" and "test".
     """
 
-    print(
-        "Parsing the qm9 data by number of total atoms="
-        f"{max_training_atoms_per_molecule}"
-    )
+    # The objects below is a list of dictionaries in which the keys specify
+    # to the absorbing atom type
+    data["n_atoms"] = [atom_count(smi) for smi in data["origin_smiles"]]
+    data["total_atoms"] = [sum(xx.values()) for xx in data["n_atoms"]]
 
-    # First, we get the SAME (as long as seed is not None) testing set
-    # as a random sample of the data.
-    np.random.seed(seed)
-    L = data["x"].shape[0]
-    all_indexes = np.array([ii for ii in range(L)])
-    np.random.shuffle(all_indexes)
-    all_indexes = all_indexes.tolist()
-    l_test = int(L * prop_test)
-    l_val = int(L * prop_val)
-    _where_test = all_indexes[:l_test]
-    _where_val = all_indexes[l_test:l_val+l_test]
-    _where_train = all_indexes[l_val+l_test:]
-    print("Indexes:")
-    print(f"\twhere_test={_where_test[:10]}...")
-
-    n_total_in_datapoint = [
-        sum(atom_count(smi).values()) for smi in data["origin_smiles"]
+    # Find the testing set immediately
+    where_test = [
+        ii for ii, xx in enumerate(data["total_atoms"])
+        if xx == test_atoms_per_molecule
     ]
 
-    _where_leq_max_training_atoms_per_molecule = [
-        ii for ii, n in enumerate(n_total_in_datapoint)
-        if n <= max_training_atoms_per_molecule
+    # Then get everything else
+    where_everything_else = [
+        ii for ii, xx in enumerate(data["total_atoms"])
+        if xx <= max_training_atoms_per_molecule
     ]
 
-    # Convert everything into sets for the next operations
-    _where_val = set(_where_val)
-    _where_train = set(_where_train)
-    _where_leq_max_training_atoms_per_molecule \
-        = set(_where_leq_max_training_atoms_per_molecule)
+    # Shuffle the everything else vector deterministically if seed is set
+    if seed is not None:
+        random.seed(seed)
+    random.shuffle(where_everything_else)
 
-    # The testing set is the testing set, and should remain unchanged
-    _where_train = list(_where_train.intersection(
-        _where_leq_max_training_atoms_per_molecule
-    ))
-    _where_val = list(_where_val.intersection(
-        _where_leq_max_training_atoms_per_molecule
-    ))
-    print(f"\twhere_val={_where_val[:10]}...")
-    print(f"\twhere_train={_where_train[:10]}...")
+    # Split everything else into training and validation
+    N_val = int(prop_val * len(where_everything_else))
+    where_val = where_everything_else[:N_val]
+    where_train = where_everything_else[N_val:]
 
-    d = _qm9_train_val_test_from_data(
-        data, _where_train, _where_val, _where_test
-    )
-
-    _triple_check_splits_by_atom_number(d)
-
+    # Finalize
+    d = _qm9_train_val_test_from_data(data, where_train, where_val, where_test)
+    _check_names_disjoint(d)
+    _check_smiles_disjoint(d)
     return d
 
 
@@ -425,6 +416,6 @@ def split_qm9_data_by_number_of_absorbers(
         data, where_train, where_val, where_test
     )
 
-    _triple_check_splits_by_atom_number(d)
+    _check_names_disjoint(d)
 
     return d

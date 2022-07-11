@@ -1,6 +1,7 @@
 """General utilities for parsing the QM9 database."""
 
 from collections import Counter
+from functools import cache
 
 import numpy as np
 from rdkit import Chem
@@ -145,6 +146,86 @@ def remove_zwitter_ions_(data):
     print(f"Down-sampled to {L} data after removing zwitter ions")
 
 
+@cache
+def atom_count(smile):
+    """Gets the atom count, resolved by atom type. Does not count hydrogen.
+
+    Parameters
+    ----------
+    smile : str
+
+    Returns
+    -------
+    dict
+    """
+
+    mol = Chem.MolFromSmiles(smile)
+    return dict(Counter([atom.GetSymbol() for atom in mol.GetAtoms()]))
+
+
+def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
+    """Summary
+
+    Parameters
+    ----------
+    data : TYPE
+        Description
+    where_train : TYPE
+        Description
+    where_val : TYPE
+        Description
+    where_test : TYPE
+        Description
+
+    Returns
+    -------
+    TYPE
+        Description
+    """
+
+    assert set(where_train).isdisjoint(set(where_val))
+    assert set(where_train).isdisjoint(set(where_test))
+    assert set(where_val).isdisjoint(set(where_test))
+
+    train = {
+        "grid": data["grid"],
+        "x": data["x"][where_train, :],
+        "y": data["y"][where_train, :],
+        "names": [data["names"][ii] for ii in where_train],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
+        "n_atoms": [
+            atom_count(data["origin_smiles"][ii]) for ii in where_train
+        ],
+    }
+    val = {
+        "grid": data["grid"],
+        "x": data["x"][where_val, :],
+        "y": data["y"][where_val, :],
+        "names": [data["names"][ii] for ii in where_val],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_val],
+        "n_atoms": [
+            atom_count(data["origin_smiles"][ii]) for ii in where_val
+        ],
+    }
+    test = {
+        "grid": data["grid"],
+        "x": data["x"][where_test, :],
+        "y": data["y"][where_test, :],
+        "names": [data["names"][ii] for ii in where_test],
+        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
+        "n_atoms": [
+            atom_count(data["origin_smiles"][ii]) for ii in where_test
+        ],
+    }
+
+    L1 = len(train["origin_smiles"])
+    L2 = len(val["origin_smiles"])
+    L3 = len(test["origin_smiles"])
+    print(f"Done with {L1} train, {L2} val and {L3} test")
+
+    return {"train": train, "val": val, "test": test}
+
+
 def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     """Executes a fully random split of the provided data. The provided
     ``prop_test`` indicates the proportion of the data to reserve for testing.
@@ -174,39 +255,103 @@ def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     where_train = _train.indices
     where_val = _val.indices
     where_test = _test.indices
-    assert set(where_train).isdisjoint(set(where_val))
-    assert set(where_train).isdisjoint(set(where_test))
-    assert set(where_val).isdisjoint(set(where_test))
 
-    # Now we split these up
-    train = {
-        "grid": data["grid"],
-        "x": data["x"][where_train, :],
-        "y": data["y"][where_train, :],
-        "names": [data["names"][ii] for ii in where_train],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
-    }
-    val = {
-        "grid": data["grid"],
-        "x": data["x"][where_val, :],
-        "y": data["y"][where_val, :],
-        "names": [data["names"][ii] for ii in where_val],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_val],
-    }
-    test = {
-        "grid": data["grid"],
-        "x": data["x"][where_test, :],
-        "y": data["y"][where_test, :],
-        "names": [data["names"][ii] for ii in where_test],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
-    }
+    return _qm9_train_val_test_from_data(
+        data, where_train, where_val, where_test
+    )
 
-    L1 = len(train["origin_smiles"])
-    L2 = len(val["origin_smiles"])
-    L3 = len(test["origin_smiles"])
-    print(f"Done with {L1} train, {L2} val and {L3} test")
 
-    return {"train": train, "val": val, "test": test}
+def split_qm9_data_by_number_of_total_atoms(
+    data,
+    max_training_atoms_per_molecule=7,
+    prop_val=0.1,
+    seed=123
+):
+    """A helper function for preparing molecular data that resolves the
+    training and testing sets by the number of total atoms in the molecule.
+
+    .. note::
+
+        It is assumed that the keys in the passed data are
+        ``['grid', 'y', 'x', 'names', 'origin_smiles']``.
+
+    Parameters
+    ----------
+    data : dict
+        A dictionary with keys "``x``" and "``y``", at least, for the features
+        and targets, respectively. More keys are required for additional
+        functionality.
+    max_training_atoms_per_molecule : int, optional
+        Description
+    prop_val : float, optional
+        The proportion of the training set to use for cross-validation.
+    seed : None, optional
+        Deterministic split of the training and validation sets.
+
+    Returns
+    -------
+    dict
+        A dictionary of of dictionaries, with keys as "train" and "test".
+    """
+
+    print(
+        "Parsing the qm9 data by number of total atoms="
+        f"{max_training_atoms_per_molecule}"
+    )
+
+    n_absorbers_in_datapoint = np.array([
+        sum(dict(atom_count(smi)).values()) for smi in data["origin_smiles"]
+    ])
+
+    where_train = np.where(
+        (n_absorbers_in_datapoint <= max_training_atoms_per_molecule)
+    )[0]
+
+    L = len(where_train)
+    n_val = int(L * prop_val)
+    n_train = L - n_val
+    assert n_train > 0
+    _train, _val = torch.utils.data.random_split(
+        range(L),
+        [n_train, n_val],
+        generator=torch.Generator().manual_seed(seed) if seed is not None
+        else None
+    )
+    where_train = _train.indices
+    where_val = _val.indices
+    where_test = np.where(
+        (n_absorbers_in_datapoint > max_training_atoms_per_molecule)
+    )[0]
+
+    d = _qm9_train_val_test_from_data(
+        data, where_train, where_val, where_test
+    )
+
+    # Triple check
+    assert set(d["train"]["names"]).isdisjoint(set(d["val"]["names"]))
+    assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
+    assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
+
+    # Molecules i.e. SMILES should also be disjoint between the TEST and TRAIN
+    # sets, NOT the VAL and TRAIN sets.
+    assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
+    assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
+
+    # Final assertion
+    assert all([
+        xx <= max_training_atoms_per_molecule
+        for xx in sum(d["train"]["n_atoms"].values())
+    ])
+    assert all([
+        xx <= max_training_atoms_per_molecule
+        for xx in sum(d["val"]["n_atoms"].values())
+    ])
+    assert all([
+        xx > max_training_atoms_per_molecule
+        for xx in sum(d["test"]["n_atoms"].values())
+    ])
+
+    return d
 
 
 def split_qm9_data_by_number_of_absorbers(

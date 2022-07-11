@@ -297,19 +297,13 @@ def split_qm9_data_by_number_of_total_atoms(
     _where_train = np.where(
         (n_absorbers_in_datapoint <= max_training_atoms_per_molecule)
     )[0]
+    
+    np.random.seed(seed)
+    l_valid = int(len(_where_train) * prop_val)
+    np.random.shuffle(_where_train)
+    where_val = _where_train[:l_valid]
+    where_train = _where_train[l_valid:]
 
-    L = len(_where_train)
-    n_val = int(L * prop_val)
-    n_train = L - n_val
-    assert n_train > 0
-    _train, _val = torch.utils.data.random_split(
-        range(L),
-        [n_train, n_val],
-        generator=torch.Generator().manual_seed(seed) if seed is not None
-        else None
-    )
-    where_train = _where_train[_train.indices]
-    where_val = _where_train[_val.indices]
     where_test = np.where(
         (n_absorbers_in_datapoint > max_training_atoms_per_molecule)
     )[0]
@@ -328,7 +322,7 @@ def split_qm9_data_by_number_of_total_atoms(
     assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
     assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
 
-    return d
+    return d, n_absorbers_in_datapoint
 
 
 def split_qm9_data_by_number_of_absorbers(

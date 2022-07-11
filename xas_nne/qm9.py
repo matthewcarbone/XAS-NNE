@@ -303,11 +303,11 @@ def split_qm9_data_by_number_of_total_atoms(
         sum(dict(atom_count(smi)).values()) for smi in data["origin_smiles"]
     ])
 
-    where_train = np.where(
+    _where_train = np.where(
         (n_absorbers_in_datapoint <= max_training_atoms_per_molecule)
     )[0]
 
-    L = len(where_train)
+    L = len(_where_train)
     n_val = int(L * prop_val)
     n_train = L - n_val
     assert n_train > 0
@@ -317,8 +317,8 @@ def split_qm9_data_by_number_of_total_atoms(
         generator=torch.Generator().manual_seed(seed) if seed is not None
         else None
     )
-    where_train = _train.indices
-    where_val = _val.indices
+    where_train = _where_train[_train.indices]
+    where_val = _where_train[_val.indices]
     where_test = np.where(
         (n_absorbers_in_datapoint > max_training_atoms_per_molecule)
     )[0]

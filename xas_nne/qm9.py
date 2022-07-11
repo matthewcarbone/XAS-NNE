@@ -187,6 +187,10 @@ def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
     assert set(where_train).isdisjoint(set(where_test))
     assert set(where_val).isdisjoint(set(where_test))
 
+    where_train = np.array(where_train)
+    where_val = np.array(where_val)
+    where_test = np.array(where_test)
+
     train = {
         "grid": data["grid"],
         "x": data["x"][where_train, :],

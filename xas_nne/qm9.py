@@ -252,6 +252,25 @@ def random_split(data, prop_test=0.1, prop_val=0.1, seed=123):
     )
 
 
+def _triple_check_splits_by_atom_number(d):
+
+    assert set(d["train"]["names"]).isdisjoint(set(d["val"]["names"]))
+    assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
+    assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
+
+    # Molecules i.e. SMILES should also be disjoint between the TEST and TRAIN
+    # sets, NOT the VAL and TRAIN sets.
+    assert set(
+        d["train"]["origin_smiles"]
+    ).isdisjoint(set(d["test"]["origin_smiles"]))
+    assert set(
+        d["val"]["origin_smiles"]
+    ).isdisjoint(set(d["test"]["origin_smiles"]))
+    assert not set(
+        d["val"]["origin_smiles"]
+    ).isdisjoint(set(d["train"]["origin_smiles"]))
+
+
 def split_qm9_data_by_number_of_total_atoms(
     data,
     max_training_atoms_per_molecule=7,
@@ -290,12 +309,12 @@ def split_qm9_data_by_number_of_total_atoms(
         f"{max_training_atoms_per_molecule}"
     )
 
-    n_absorbers_in_datapoint = np.array([
-        sum(dict(atom_count(smi)).values()) for smi in data["origin_smiles"]
+    n_total_in_datapoint = np.array([
+        sum(atom_count(smi).values()) for smi in data["origin_smiles"]
     ])
 
     _where_train = np.where(
-        (n_absorbers_in_datapoint <= max_training_atoms_per_molecule)
+        (n_total_in_datapoint <= max_training_atoms_per_molecule)
     )[0]
     
     np.random.seed(seed)
@@ -305,31 +324,24 @@ def split_qm9_data_by_number_of_total_atoms(
     where_train = _where_train[l_valid:]
 
     where_test = np.where(
-        (n_absorbers_in_datapoint > max_training_atoms_per_molecule)
+        (n_total_in_datapoint > max_training_atoms_per_molecule)
     )[0]
 
     d = _qm9_train_val_test_from_data(
         data, where_train, where_val, where_test
     )
 
-    # Triple check
-    assert set(d["train"]["names"]).isdisjoint(set(d["val"]["names"]))
-    assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
-    assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
+    _triple_check_splits_by_atom_number(d)
 
-    # Molecules i.e. SMILES should also be disjoint between the TEST and TRAIN
-    # sets, NOT the VAL and TRAIN sets.
-    assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
-    assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
-
-    return d, n_absorbers_in_datapoint
+    return d
 
 
 def split_qm9_data_by_number_of_absorbers(
     data,
     absorber,
     max_training_absorbers=2,
-    keep_zwitter=False
+    seed=123,
+    prop_val=0.1
 ):
     """A helper function for preparing qm9 data that resolves the training and
     testing sets by the number of absorbing atoms. Specifically, the specified
@@ -363,75 +375,29 @@ def split_qm9_data_by_number_of_absorbers(
     print(f"Parsing the qm9 data by number of absorbers={absorber}")
     print(f"Training data will have <={max_training_absorbers} absorbers")
     print("Test data will get the rest")
-    print(f"Keeping zwitterions: {keep_zwitter}")
-
-    # Will throw a key error if ``origin_smiles`` is not in the data
-    unique_smiles = list(set(data["origin_smiles"]))
-
-    # Convert to mol
-    smiles_to_mol_map = {
-        smile: Chem.MolFromSmiles(smile) for smile in unique_smiles
-    }
-
-    # Get the number of absorbers
-    print("Computing smiles_to_n_absorbers_map")
-    smiles_to_n_absorbers_map = dict()
-
-    for smile in tqdm(smiles_to_mol_map.keys()):
-        mol = smiles_to_mol_map[smile]
-        counter = Counter([atom.GetSymbol() for atom in mol.GetAtoms()])
-        smiles_to_n_absorbers_map[smile] = counter[absorber]
 
     n_absorbers_in_datapoint = np.array([
-        smiles_to_n_absorbers_map[smi] for smi in data["origin_smiles"]
+        atom_count(smi)[absorber] for smi in data["origin_smiles"]
     ])
 
-    where_train = np.where(
+    _where_train = np.where(
         (n_absorbers_in_datapoint <= max_training_absorbers)
     )[0]
+
+    np.random.seed(seed)
+    l_valid = int(len(_where_train) * prop_val)
+    np.random.shuffle(_where_train)
+    where_val = _where_train[:l_valid]
+    where_train = _where_train[l_valid:]
+
     where_test = np.where(
         (n_absorbers_in_datapoint > max_training_absorbers)
     )[0]
-    assert set(list(where_train)).isdisjoint(set(list(where_test)))
 
-    # Now we split these up
-    train = {
-        "grid": data["grid"],
-        "x": data["x"][where_train, :],
-        "y": data["y"][where_train, :],
-        "names": [data["names"][ii] for ii in where_train],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
-        "n_absorbers_in_molecule": [
-            n_absorbers_in_datapoint[ii] for ii in where_train
-        ],
-    }
-    test = {
-        "grid": data["grid"],
-        "x": data["x"][where_test, :],
-        "y": data["y"][where_test, :],
-        "names": [data["names"][ii] for ii in where_test],
-        "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
-        "n_absorbers_in_molecule": [
-            n_absorbers_in_datapoint[ii] for ii in where_test
-        ],
-    }
+    d = _qm9_train_val_test_from_data(
+        data, where_train, where_val, where_test
+    )
 
-    # Triple check
-    assert set(train["names"]).isdisjoint(set(test["names"]))
+    _triple_check_splits_by_atom_number(d)
 
-    # Molecules i.e. SMILES should also be disjoint
-    assert set(train["origin_smiles"]).isdisjoint(set(test["origin_smiles"]))
-
-    # Final assertion
-    assert all([
-        xx <= max_training_absorbers for xx in train["n_absorbers_in_molecule"]
-    ])
-    assert all([
-        xx > max_training_absorbers for xx in test["n_absorbers_in_molecule"]
-    ])
-
-    L1 = len(train["origin_smiles"])
-    L2 = len(test["origin_smiles"])
-    print(f"Done with {L1} train and {L2} test")
-
-    return {"train": train, "test": test}
+    return d

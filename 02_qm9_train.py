@@ -102,9 +102,8 @@ if __name__ == '__main__':
     if args.ensemble_name is None:
         tmp = str(Path(args.data_path).stem)
         args.ensemble_name \
-            = str(Path("Ensembles") / Path(f"{NOW}-{tmp}-ensemble"))
-    else:
-        args.ensemble_name = str(f"{NOW}-{args.ensemble_name}")
+            = str(Path("Ensembles") / Path(f"{tmp}-ensemble"))
+
     print(f"Ensemble path set to {args.ensemble_name}")
 
     from_random_architecture_kwargs = read_json(args.random_kwargs_json)

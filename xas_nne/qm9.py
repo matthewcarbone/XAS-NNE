@@ -310,10 +310,6 @@ def split_qm9_data_by_number_of_total_atoms(
         f"{max_training_atoms_per_molecule}"
     )
 
-    n_total_in_datapoint = np.array([
-        sum(atom_count(smi).values()) for smi in data["origin_smiles"]
-    ])
-
     # First, we get the SAME (as long as seed is not None) testing set
     # as a random sample of the data.
     np.random.seed(seed)
@@ -331,9 +327,14 @@ def split_qm9_data_by_number_of_total_atoms(
     print(f"\twhere_val={_where_val[:10]}...")
     print(f"\twhere_train={_where_train[:10]}...")
 
-    _where_leq_max_training_atoms_per_molecule = np.where(
-        (n_total_in_datapoint <= max_training_atoms_per_molecule)
-    )[0].tolist()
+    n_total_in_datapoint = [
+        sum(atom_count(smi).values()) for smi in data["origin_smiles"]
+    ]
+
+    _where_leq_max_training_atoms_per_molecule = [
+        ii for ii, n in enumerate(n_total_in_datapoint)
+        if n <= max_training_atoms_per_molecule
+    ]
 
     # Convert everything into sets for the next operations
     _where_val = set(_where_val)

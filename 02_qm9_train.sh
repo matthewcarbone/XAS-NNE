@@ -2,7 +2,7 @@
 
 
 
-WORKDIR=/hpcgpfs01/work/cfn/mcarbone/XAS-NNE
+WORKDIR=data/qm9/ml_ready
 N_ENSEMBLES=30
 PRINT_EVERY_EPOCH=50
 N_GPU=1

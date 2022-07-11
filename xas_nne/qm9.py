@@ -324,8 +324,6 @@ def split_qm9_data_by_number_of_total_atoms(
     _where_train = all_indexes[l_val+l_test:]
     print("Indexes:")
     print(f"\twhere_test={_where_test[:10]}...")
-    print(f"\twhere_val={_where_val[:10]}...")
-    print(f"\twhere_train={_where_train[:10]}...")
 
     n_total_in_datapoint = [
         sum(atom_count(smi).values()) for smi in data["origin_smiles"]
@@ -343,15 +341,17 @@ def split_qm9_data_by_number_of_total_atoms(
         = set(_where_leq_max_training_atoms_per_molecule)
 
     # The testing set is the testing set, and should remain unchanged
-    _where_train = _where_train.intersection(
+    _where_train = list(_where_train.intersection(
         _where_leq_max_training_atoms_per_molecule
-    )
-    _where_val = _where_val.intersection(
+    ))
+    _where_val = list(_where_val.intersection(
         _where_leq_max_training_atoms_per_molecule
-    )
+    ))
+    print(f"\twhere_val={_where_val[:10]}...")
+    print(f"\twhere_train={_where_train[:10]}...")
 
     d = _qm9_train_val_test_from_data(
-        data, list(_where_train), list(_where_val), _where_test
+        data, _where_train, _where_val, _where_test
     )
 
     _triple_check_splits_by_atom_number(d)

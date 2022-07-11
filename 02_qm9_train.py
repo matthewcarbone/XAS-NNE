@@ -126,7 +126,7 @@ if __name__ == '__main__':
         validation_data=data["val"],
         n_estimators=args.n_estimators,
         from_random_architecture_kwargs=from_random_architecture_kwargs,
-        use_seeds=True,
+        use_seeds=False,
         epochs=args.max_epochs,
         gpus=args.n_gpu,
         downsample_training_proportion=args.downsample_prop,

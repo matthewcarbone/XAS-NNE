@@ -193,9 +193,6 @@ def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
         "y": data["y"][where_train, :],
         "names": [data["names"][ii] for ii in where_train],
         "origin_smiles": [data["origin_smiles"][ii] for ii in where_train],
-        "n_atoms": [
-            atom_count(data["origin_smiles"][ii]) for ii in where_train
-        ],
     }
     val = {
         "grid": data["grid"],
@@ -203,9 +200,6 @@ def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
         "y": data["y"][where_val, :],
         "names": [data["names"][ii] for ii in where_val],
         "origin_smiles": [data["origin_smiles"][ii] for ii in where_val],
-        "n_atoms": [
-            atom_count(data["origin_smiles"][ii]) for ii in where_val
-        ],
     }
     test = {
         "grid": data["grid"],
@@ -213,9 +207,6 @@ def _qm9_train_val_test_from_data(data, where_train, where_val, where_test):
         "y": data["y"][where_test, :],
         "names": [data["names"][ii] for ii in where_test],
         "origin_smiles": [data["origin_smiles"][ii] for ii in where_test],
-        "n_atoms": [
-            atom_count(data["origin_smiles"][ii]) for ii in where_test
-        ],
     }
 
     L1 = len(train["origin_smiles"])
@@ -336,20 +327,6 @@ def split_qm9_data_by_number_of_total_atoms(
     # sets, NOT the VAL and TRAIN sets.
     assert set(d["train"]["names"]).isdisjoint(set(d["test"]["names"]))
     assert set(d["val"]["names"]).isdisjoint(set(d["test"]["names"]))
-
-    # Final assertion
-    assert all([
-        xx <= max_training_atoms_per_molecule
-        for xx in sum(d["train"]["n_atoms"].values())
-    ])
-    assert all([
-        xx <= max_training_atoms_per_molecule
-        for xx in sum(d["val"]["n_atoms"].values())
-    ])
-    assert all([
-        xx > max_training_atoms_per_molecule
-        for xx in sum(d["test"]["n_atoms"].values())
-    ])
 
     return d
 

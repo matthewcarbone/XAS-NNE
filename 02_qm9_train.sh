@@ -10,6 +10,7 @@ WORKDIR=data/qm9/ml_ready
 N_ENSEMBLES=30
 PRINT_EVERY_EPOCH=50
 N_GPU=1
+MAX_EPOCHS=2000
 
 
 run_random_qm9()
@@ -39,7 +40,8 @@ run_random_qm9()
                 --downsample-prop "$downsample_prop" \
                 --print-every-epoch "$PRINT_EVERY_EPOCH" \
                 --n-gpu "$N_GPU" \
-                -n "$N_ENSEMBLES"
+                -n "$N_ENSEMBLES" \
+                --max-epochs "$MAX_EPOCHS"
         done
     done
 }

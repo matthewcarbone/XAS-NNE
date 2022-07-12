@@ -446,7 +446,19 @@ class SingleEstimator(MSONable):
 
     @property
     def best_checkpoint(self):
-        return self._best_checkpoint
+        checkpoint = Path(self._best_checkpoint)
+        if checkpoint.exists():
+            return str(checkpoint)
+
+        # If the path does not exist, it might be because the absolute paths
+        # were different.
+        L = len(checkpoint.parts)
+        for ii in range(1, L):
+            new_path_test = Path(*checkpoint.parts[ii:])
+            if new_path_test.exists():
+                return str(new_path_test)
+        else:
+            raise RuntimeError(f"Checkpoint {checkpoint} does not exist")
 
     @property
     def best_model(self):

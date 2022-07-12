@@ -47,6 +47,8 @@ run_random_qm9()
 
 if [ "$RUN_WHAT" = "qm9-pca" ]; then
     run_random_qm9 true
+elif [ "$RUN_WHAT" = "qm9-pca" ]; then
+    run_random_qm9 false
 else
     echo "Unknown input"
 fi

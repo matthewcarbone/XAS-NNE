@@ -217,14 +217,6 @@ class LightningMultiLayerPerceptron(
         criterion="mae",
         last_batch_norm=False,
     ):
-
-        loc = {
-            key: value for key, value in locals().items()
-            if key != "self"
-        }
-        print(
-            f"Initializing LightningMultiLayerPerceptron with args: {loc}"
-        )
         hidden_sizes = np.array(hidden_sizes).tolist()
         super().__init__()
         self.save_hyperparameters()
@@ -448,6 +440,7 @@ class SingleEstimator(MSONable):
     def best_checkpoint(self):
         checkpoint = Path(self._best_checkpoint)
         if checkpoint.exists():
+            print(f"Loading from checkpoint {checkpoint}")
             return str(checkpoint)
 
         # If the path does not exist, it might be because the absolute paths
@@ -456,6 +449,7 @@ class SingleEstimator(MSONable):
         for ii in range(1, L):
             new_path_test = Path(*checkpoint.parts[ii:])
             if new_path_test.exists():
+                print(f"Loading from checkpoint {new_path_test}")
                 return str(new_path_test)
         else:
             raise RuntimeError(f"Checkpoint {checkpoint} does not exist")

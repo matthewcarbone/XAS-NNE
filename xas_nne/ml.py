@@ -463,7 +463,7 @@ class SingleEstimator(MSONable):
     @property
     def best_model(self):
         return load_LightningMultiLayerPerceptron_from_ckpt(
-            self._best_checkpoint
+            self.best_checkpoint
         )
 
     def __init__(

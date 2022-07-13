@@ -777,7 +777,13 @@ class Ensemble(MSONable):
             results.append(estimator.predict(x))
         return np.array(results)
 
-    def predict_filter_outliers(self, x, sd_mult=3, threshold=0.75):
+    def predict_filter_outliers(
+        self,
+        x,
+        sd_mult=3,
+        threshold=0.75,
+        max_spectra_value=100.0
+    ):
         """Summary
         
         Parameters
@@ -806,10 +812,18 @@ class Ensemble(MSONable):
 
         # cond is of shape N_ensembles x N_examples x M
         # For every example, we want to drop certain estimator predictions
-        cond = (predictions > mu + _sd) | (predictions < mu - _sd)
+        c1 = predictions > mu + _sd | (predictions < mu - _sd)
+
+        # We also have sensible heuristics... for example, none of the
+        # predictions should be greater than 100. None can be negative due to
+        # the usual softmax output
+        c2 = predictions > max_spectra_value
+
+        # The total condition
+        cond = (c1.mean(axis=2) > threshold) | np.any(c2, axis=2)
 
         # where_keep is of shape N_ensembles x N_examples (I think)
-        where_discard = np.where(cond.mean(axis=2) > threshold)
+        where_discard = np.where(cond)
 
         # This is where it gets a little tricky. Set these values to nan
         predictions[where_discard] = np.nan

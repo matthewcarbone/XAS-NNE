@@ -809,7 +809,7 @@ class Ensemble(MSONable):
         cond = (predictions > mu + _sd) | (predictions < mu - _sd)
 
         # where_keep is of shape N_ensembles x N_examples (I think)
-        where_discard = np.where(cond.mean(axis=2) > threshold)[0]
+        where_discard = np.where(cond.mean(axis=2) > threshold)
 
         # This is where it gets a little tricky. Set these values to nan
         predictions[where_discard] = np.nan

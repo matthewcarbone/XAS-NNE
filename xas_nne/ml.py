@@ -812,7 +812,7 @@ class Ensemble(MSONable):
 
         # cond is of shape N_ensembles x N_examples x M
         # For every example, we want to drop certain estimator predictions
-        c1 = predictions > mu + _sd | (predictions < mu - _sd)
+        c1 = (predictions > mu + _sd) | (predictions < mu - _sd)
 
         # We also have sensible heuristics... for example, none of the
         # predictions should be greater than 100. None can be negative due to

@@ -777,6 +777,51 @@ class Ensemble(MSONable):
             results.append(estimator.predict(x))
         return np.array(results)
 
+    def predict_filter_outliers(self, x, sd_mult=3, threshold=0.75):
+        """Summary
+        
+        Parameters
+        ----------
+        x : TYPE
+            Description
+        sd_mult : int, optional
+            Description
+        threshold : float, optional
+            Description
+        
+        Returns
+        -------
+        numpy.ma.core.MaskedArray
+            Description
+        """
+
+        # predictions is of shape N_ensembles x N_examples x M
+        predictions = self.predict(x)
+
+        # Get the mean and standard deviations over the ensembles
+        # These are now of shape N_examples x M
+        mu = predictions.mean(axis=0, keepdims=True)
+        sd = predictions.std(axis=0, keepdims=True)
+        _sd = sd_mult * sd
+
+        # cond is of shape N_ensembles x N_examples x M
+        # For every example, we want to drop certain estimator predictions
+        cond = (predictions > mu + _sd) | (predictions < mu - _sd)
+
+        # where_keep is of shape N_ensembles x N_examples (I think)
+        where_discard = np.where(cond.mean(axis=2) > threshold)[0]
+
+        # This is where it gets a little tricky. Set these values to nan
+        predictions[where_discard] = np.nan
+
+        # Now generate a MASKED array where the mask is where the predictions
+        # are nans
+        final_preds = np.ma.array(predictions, mask=np.isnan(predictions))
+
+        # Taking the means/standard deviations will safely ignore the nan'd
+        # values
+        return final_preds
+
     # def train_ensemble_parallel(
     #     self,
     #     training_data,

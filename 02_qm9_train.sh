@@ -6,7 +6,7 @@ RUN_WHAT="$1"
 EXECUTABLE="${2:-echo}"
 
 
-WORKDIR=data/qm9/ml_ready
+WORKDIR=data/qm9/ml_ready/random_splits
 N_ENSEMBLES=30
 PRINT_EVERY_EPOCH=50
 N_GPU=1
@@ -18,15 +18,15 @@ run_random_qm9()
 
     if [ "$1" = true ]; then
         declare -a paths=(
-            "XANES-220710-ACSF-O-RANDOM-SPLITS-PCA-decomp-maxcol-21"
-            "XANES-220710-ACSF-N-RANDOM-SPLITS-PCA-decomp-maxcol-25"
-            "XANES-220710-ACSF-C-RANDOM-SPLITS-PCA-decomp-maxcol-23"
+            "XANES-220712-ACSF-O-RANDOM-SPLITS-PCA-decomp-maxcol-21"
+            "XANES-220712-ACSF-N-RANDOM-SPLITS-PCA-decomp-maxcol-25"
+            "XANES-220712-ACSF-C-RANDOM-SPLITS-PCA-decomp-maxcol-23"
         )
     else
         declare -a paths=(
-            "XANES-220710-ACSF-O-RANDOM-SPLITS"
-            "XANES-220710-ACSF-N-RANDOM-SPLITS"
-            "XANES-220710-ACSF-C-RANDOM-SPLITS"
+            "XANES-220712-ACSF-O-RANDOM-SPLITS"
+            "XANES-220712-ACSF-N-RANDOM-SPLITS"
+            "XANES-220712-ACSF-C-RANDOM-SPLITS"
         )
     fi
 

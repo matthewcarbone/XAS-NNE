@@ -781,8 +781,10 @@ class Ensemble(MSONable):
         self,
         x,
         sd_mult=3,
-        threshold=0.75,
-        max_spectra_value=100.0
+        threshold_sd=0.75,
+        max_spectra_value=100.0,
+        threshold_zero=0.5,
+        min_spectra_value=0.05
     ):
         """Summary
         
@@ -792,7 +794,7 @@ class Ensemble(MSONable):
             Description
         sd_mult : int, optional
             Description
-        threshold : float, optional
+        threshold_sd : float, optional
             Description
         
         Returns
@@ -813,14 +815,20 @@ class Ensemble(MSONable):
         # cond is of shape N_ensembles x N_examples x M
         # For every example, we want to drop certain estimator predictions
         c1 = (predictions > mu + _sd) | (predictions < mu - _sd)
+        c1 = c1.mean(axis=2) > threshold_sd
 
         # We also have sensible heuristics... for example, none of the
         # predictions should be greater than 100. None can be negative due to
         # the usual softmax output
-        c2 = predictions > max_spectra_value
+        c2 = np.any(predictions > max_spectra_value, axis=2)
+
+        # Finally, if the majority of the predicted points are around 0, this
+        # is clearly unphysical. This will catch some predictions where there
+        # are random, sharply peaked features.
+        c3 = (predictions < min_spectra_value).mean(axis=2) > threshold_zero
 
         # The total condition
-        cond = (c1.mean(axis=2) > threshold) | np.any(c2, axis=2)
+        cond = c1 | c2 | c3
 
         # where_keep is of shape N_ensembles x N_examples (I think)
         where_discard = np.where(cond)

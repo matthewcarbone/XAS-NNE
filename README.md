@@ -1,6 +1,10 @@
 # XAS-NNE
 
-Neural network ensembles for X-ray absorption spectroscopy of molecules and materials.
+Neural network ensembles for X-ray absorption spectroscopy of molecules.
+
+**NOTE: this is not a software package, and the use of the code is somewhat unclear from the notebooks alone. To reproduce results in the manuscript, the notebooks and scripts can more or less be run in order.**
+
+**NOTE: information in the `data` directory is generated on the fly, and data is available upon reasonable request to the authors.**
 
 ## Funding acknowledgement
 

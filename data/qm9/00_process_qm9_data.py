@@ -14,15 +14,19 @@ from xas_nne.utils import read_json, save_json, timeit  # noqa
 from xas_nne.qm9 import read_qm9_xyz  # noqa
 from xas_nne.feff import FeffWriter, load_completed_FEFF_results  # noqa
 
+# This piece constructs the json file for quickly loading QM9 in the future
 DSGDB9NSD_PATH = None
 QM9_TARGET_JSON = Path("raw_qm9.json")
-
-
 STEP_QM9_TO_JSON = True
+
+# Write the appropriate FEFF input files
 STEP_FEFF_INPUTS = False
 ABSORBERS = ["C", "N", "O"]
 SPECTRUM_TYPE = "XANES"
-STEP_PICKLE = True
+
+# Write the combined FEFF results and data to a pickle file
+# Requires FEFF calculations to be complete
+STEP_PICKLE = False
 
 
 assert SPECTRUM_TYPE in ["XANES", "EXAFS"]

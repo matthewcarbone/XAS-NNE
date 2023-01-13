@@ -1,18 +1,22 @@
-# XAS-NNE
+XAS-NNE
+=======
+
+`Uncertainty-aware predictions of molecular X-ray absorption spectra using neural network ensembles`
 
 Companion code for preprint https://arxiv.org/abs/2210.00336 (under review at Physical Review Research).
 
-Neural network ensembles for X-ray absorption spectroscopy of molecules.
+Data
+----
 
-**NOTE: this is not a software package, and the use of the code is somewhat unclear from the notebooks alone. To reproduce results in the manuscript, the notebooks and scripts can more or less be run in order.**
+Data used in the notebooks shown in the root directory of the repository can be accessed from Zenodo at DOI [TK]. With the current paths in the notebook, the file ``Ensembles.tar.bz2`` can be unzipped in the root directory, and the remainder of the files should be unzipped in ``data/qm9`` (of course, the paths in the notebooks can be changed at the discretion of the user!).
 
-**NOTE: information in the `data` directory is generated on the fly, and data is available upon reasonable request to the authors.**
+Funding acknowledgement
+-----------------------
 
-## Funding acknowledgement
+This research is based upon work supported by the U.S. Department of Energy, Office of Science, Office Basic Energy Sciences, under Award Number FWP PS-030. This research also used theory and computational resources of the Center for Functional Nanomaterials, which is a U.S. Department of Energy Office of Science User Facility, and the Scientific Data and Computing Center, a component of the Computational Science Initiative, at Brookhaven National Laboratory under Contract No. DE-SC0012704.
 
-This research is based upon work supported by the U.S. Department of Energy, Office of Science, Office Basic Energy Sciences, under Award Number FWP PS-030. This research used resources of the Center for Functional Nanomaterials (CFN), which is a U.S. Department of Energy Office of Science User Facility, at Brookhaven National Laboratory under Contract No. DE-SC0012704.
-
-### Disclaimer
+Disclaimer
+^^^^^^^^^^
 
 The Software resulted from work developed under a U.S. Government Contract No. DE-SC0012704 and are subject to the following terms: the U.S. Government is granted for itself and others acting on its behalf a paid-up, nonexclusive, irrevocable worldwide license in this computer software and data to reproduce, prepare derivative works, and perform publicly and display publicly.
 

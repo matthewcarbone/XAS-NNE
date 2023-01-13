@@ -4,6 +4,7 @@ old
 Ensembles
 Figures
 !example_random_kwargs.json
+data_for_zenodo/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

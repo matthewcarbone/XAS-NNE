@@ -10,7 +10,10 @@ XAS-NNE
 Data
 ----
 
-Data used in the notebooks shown in the root directory of the repository can be accessed from Zenodo at DOI [TK]. With the current paths in the notebook, the file ``Ensembles.tar.bz2`` can be unzipped in the root directory, and the remainder of the files should be unzipped in ``data/qm9`` (of course, the paths in the notebooks can be changed at the discretion of the user!).
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.7554888.svg
+   :target: https://doi.org/10.5281/zenodo.7554888
+
+Data used in the notebooks shown in the root directory of the repository can be accessed from Zenodo (see badge above). With the current paths in the notebook, the files ``XANES-220711-*.tar.bz2`` can be unzipped into a directory `Ensembles` in the root directory, and the remainder of the files should be unzipped in ``data/qm9`` (of course, the paths in the notebooks can be changed at the discretion of the user!).
 
 Funding acknowledgement
 -----------------------

@@ -5,7 +5,7 @@ XAS-NNE
    :target: https://zenodo.org/badge/latestdoi/505979552
 
 
-*Uncertainty-aware predictions of molecular X-ray absorption spectra using neural network ensembles.* Companion code for preprint https://arxiv.org/abs/2210.00336 (under review at Physical Review Research).
+*Uncertainty-aware predictions of molecular X-ray absorption spectra using neural network ensembles.* Companion code for published manuscript https://doi.org/10.1103/PhysRevResearch.5.013180 (open access).
 
 Data
 ----
